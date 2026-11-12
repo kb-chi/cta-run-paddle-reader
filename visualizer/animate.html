@@ -4,42 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>🚌 Route Animation</title>
-<style>
-  :root {
-    color-scheme: light;
-    --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
-    --border: rgba(11, 11, 11, 0.10); --wash: rgba(11, 11, 11, 0.04); --accent: #2a78d6;
-    --shadow: 0 4px 16px rgba(0, 0, 0, 0.10);
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      color-scheme: dark;
-      --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
-      --border: rgba(255, 255, 255, 0.10); --wash: rgba(255, 255, 255, 0.05); --accent: #3987e5;
-      --shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
-    }
-  }
-  :root[data-theme="dark"] {
-    color-scheme: dark;
-    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
-    --border: rgba(255, 255, 255, 0.10); --wash: rgba(255, 255, 255, 0.05); --accent: #3987e5;
-    --shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  .wrap { max-width: 1400px; margin: 0 auto; padding: 20px 16px 32px; }
-  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; margin-bottom: 12px; }
-  h1 { font-size: 20px; font-weight: 600; margin: 0; }
-  header a, #status { color: var(--ink-2); }
-  .controls { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-bottom: 12px; }
-  .controls label { color: var(--ink-2); display: inline-flex; align-items: center; gap: 6px; }
-  select, button, input { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; }
-  select, button { cursor: pointer; }
-  button:hover, select:hover { background: var(--wash); }
-  input.time { width: 6.2em; font-variant-numeric: tabular-nums; }
-  .primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
-  .primary:hover { background: var(--accent); filter: brightness(1.08); }
-</style>
+<link rel="stylesheet" href="common.css">
+<link rel="stylesheet" href="animate.css">
 </head>
 <body>
 <div class="wrap">

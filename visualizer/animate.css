@@ -1,0 +1,5 @@
+input.time { width: 6.2em; font-variant-numeric: tabular-nums; }
+
+  .primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+
+  .primary:hover { background: var(--accent); filter: brightness(1.08); }
