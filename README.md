@@ -25,6 +25,24 @@ The reader works on any CTA run paddles in the same format (HASTUS "cscr60", one
 
 Everything can be filtered **route by route** or **garage by garage**.
 
+## Samples
+
+**Route 22 (Clark), weekday PM rush (3–6:30 PM).**
+- Two cards at the top show trips and average frequency in each direction.
+- A chart shows how each trip begins. Northbound, two-thirds of trips are buses turning around at Harrison; southbound, most are pullouts from the garage or buses coming off other routes.
+- A table shows headway by hour and the most buses on the route at once.
+- String graphs show every trip. Rings mark mid-route reliefs, where one operator hands the bus to another at Foster.
+
+![Route 22 page in the visualizer, weekday PM rush](docs/sample-route-22-pm-rush.png)
+
+**Route 147 (Outer DuSable Lake Shore Express), weekday 3–6:30 PM, as a GIF exported from the animation player.**
+- In service, buses are labelled with their run number and colored by direction.
+- Pullouts and pull-ins are grey and labelled "G".
+- Buses coming from or going to another route say so ("From …" / "To …" and the route number), and their deadheads are shown.
+- Buses move three times as fast on DuSable Lake Shore Drive as on city streets.
+
+![Animation of route 147 buses, weekday PM rush](docs/sample-route-147-pm-rush.gif)
+
 ## Install and run (with the Summer 2026 data)
 
 1. Install **Node.js 22.13 or newer** from <https://nodejs.org> (the LTS version is fine), and [Git](https://git-scm.com) if you don't already have it.
