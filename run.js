@@ -509,14 +509,40 @@ export function runStatistics(runs) {
   const isTerminalRelief = (h) => h.startType === "relief" && h.startRelief?.direction === "Terminal";
   const startsWithDirectionalRelief = (h, t) =>
     h.startType === "relief" && !isTerminalRelief(h) && h.trips.find((x) => x.inService) === t;
-  const tripsByRoute = {}; // the counted trips, with their run, for the by-direction summary
+  // A trip split by a mid-route relief is printed as two pieces on two paddles. Join them back (the
+  // piece that ends a half → the piece that starts the relieving run's half at the same place, within
+  // 2 minutes, same route), so where the trip really ends is known (the route page does the same).
+  const piecesByRun = new Map(); // run -> its in-service pieces { h, t, first, last }
+  for (const r of runs) for (const h of r.halves) {
+    const ins = h.trips.filter((x) => x.inService);
+    const list = piecesByRun.get(r.number) ?? piecesByRun.set(r.number, []).get(r.number);
+    ins.forEach((t, i) => list.push({ h, t, first: i === 0, last: i === ins.length - 1 }));
+  }
+  const nextPiece = new Map(); // trip -> the piece that finishes it
+  for (const list of piecesByRun.values()) for (const p of list) {
+    if (!p.first || !startsWithDirectionalRelief(p.h, p.t)) continue;
+    const at = timeToSeconds(p.t.begin.time);
+    const prev = (piecesByRun.get(p.h.startRelief?.otherRun) ?? []).find((q) => q.last && !nextPiece.has(q.t)
+      && q.t.route === p.t.route && q.t.end.location === p.t.begin.location && Math.abs(timeToSeconds(q.t.end.time) - at) <= 120);
+    if (prev) nextPiece.set(prev.t, p);
+  }
+  // the whole trip: this piece's start, every later piece's stops (relief points included), the last piece's end;
+  // and whether its last piece is handed over mid-route to a run not found here (then its end isn't known)
+  const joinTrip = (t, h) => {
+    let cur = { h, t };
+    const stops = [...(t.stops ?? [])];
+    while (nextPiece.has(cur.t)) { const n = nextPiece.get(cur.t); stops.push(cur.t.end, ...(n.t.stops ?? [])); cur = n; }
+    const relievedMidRoute = cur.h.endType === "relief" && cur.h.relief?.direction !== "Terminal" && cur.h.trips.filter((x) => x.inService).at(-1) === cur.t;
+    return { trip: cur.t === t ? t : { ...t, stops, end: cur.t.end }, relievedMidRoute };
+  };
+  const tripsByRoute = {}; // the counted trips (joined), with their run, for the by-direction summary
   for (const r of runs) for (const h of r.halves) {
     if (h.startType === "pullout") pullouts++;
     for (const t of h.trips) if (t.inService && !startsWithDirectionalRelief(h, t)) {
       inServiceTrips++;
       const route = t.route ?? "unknown";
       byRoute[route] = (byRoute[route] ?? 0) + 1;
-      (tripsByRoute[route] ??= []).push({ trip: t, run: r.number });
+      (tripsByRoute[route] ??= []).push({ ...joinTrip(t, h), source: t, run: r.number });
     }
   }
   // --- How each in-service trip starts, by route ---
@@ -528,6 +554,7 @@ export function runStatistics(runs) {
   // (the first trip after a directional relief — RN / RS / RE / RW — is left out)
   const starts = {};
   const startOf = new Map(); // trip -> how it starts, kept on each departure in directionsByRoute
+  const fromRouteOf = new Map(); // trip -> the route the bus came from, for a fromOtherRoute start
   // --- Buses in service by route by hour: distinct buses with an in-service trip in that hour ---
   // (a bus handed from one run to another by relief is one bus)
   const busOf = busesFromReliefs(runs);
@@ -553,12 +580,13 @@ export function runStatistics(runs) {
       starts[route] ??= { pullout: 0, deadheadSameRoute: 0, fromOtherRoute: 0, turnAround: 0 };
       starts[route][how]++;
       startOf.set(t, how);
+      if (how === "fromOtherRoute") fromRouteOf.set(t, prevRoute);
       prevRoute = route; sawDeadhead = false;
     }
   }
   const directionsByRoute = {};
   for (const [route, list] of Object.entries(tripsByRoute)) {
-    for (const item of list) item.start = startOf.get(item.trip);
+    for (const item of list) { item.start = startOf.get(item.source); item.fromRoute = fromRouteOf.get(item.source); }
     directionsByRoute[route] = routeDirections(list);
   }
   const pct = (n, total) => Math.round((1000 * n) / total) / 10;
@@ -682,8 +710,10 @@ export function busesFromReliefs(runs) {
 /**
  * One route's service in each direction, keyed by the terminal it runs from:
  *   { "<terminal>": { toward, trips, firstTrip: { time, run, from }, lastTrip: { ... }, averageFrequency,
- *                     departures: [{ time, run, start }, ...] (every trip that way, in time order;
- *                     start = how the trip starts, as in tripStartsByRoute, when known) } }
+ *                     departures: [{ time, run, start, fromRoute }, ...] (every trip that way, in time order;
+ *                     start = how the trip starts, as in tripStartsByRoute, when known;
+ *                     fromRoute = the route the bus was on before, for a fromOtherRoute start;
+ *                     short = 1 when the trip starts or ends short of a terminal) } }
  * The terminals are the route's two most common trip start points among places that are really ends
  * of the line: a place that other trips pass through (a time point in the middle of at least 20% as
  * many trips as start or end there) is a short-line point, not a terminal. So a busy short line
@@ -739,14 +769,29 @@ export function routeDirections(list) {
     if (!g.length) continue;
     const describe = ({ trip: t, run }) => ({ time: t.begin.time, run, from: t.begin.location });
     const first = g[0], last = g[g.length - 1];
-    const span = (timeToSeconds(last.trip.begin.time) - timeToSeconds(first.trip.begin.time)) / 60;
+    const commonEnd = (pick) => {
+      const c = {};
+      for (const { trip: t } of g) { const loc = pick(t).location; if (isEnd(loc)) c[loc] = (c[loc] ?? 0) + 1; }
+      return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0];
+    };
+    const fullStarts = new Set([from, commonEnd((t) => t.begin)]);
+    const fullEnds = new Set([terminals.find((x) => x !== from) ?? from, commonEnd((t) => t.end)]);
+    const span =(timeToSeconds(last.trip.begin.time) - timeToSeconds(first.trip.begin.time)) / 60;
     out[from] = {
       toward: terminals.find((x) => x !== from) ?? from,
       trips: g.length,
       firstTrip: describe(first),
       lastTrip: describe(last),
       averageFrequency: g.length > 1 ? Math.round((10 * span) / (g.length - 1)) / 10 : null,
-      departures: g.map(({ trip: t, run, start }) => ({ time: t.begin.time, run, ...(start ? { start } : {}) })),
+      // short: starts or ends short of the line's ends (a short line / short turn). A trip's full ends are
+      // the terminals, plus this direction's own most common start and end when those are real ends of
+      // the line (not stops other trips pass through) — so a one-way downtown loop like the 134's, whose
+      // inbound trips end at Adams & Wacker but outbound ones start at Jackson & Franklin, isn't short.
+      departures: g.map(({ trip: t, run, start, fromRoute, relievedMidRoute }) => {
+        const toward = terminals.find((x) => x !== from) ?? from;
+        const short = !fullStarts.has(t.begin.location) || (!relievedMidRoute && !fullEnds.has(t.end.location));
+        return { time: t.begin.time, run, ...(start ? { start } : {}), ...(fromRoute ? { fromRoute } : {}), ...(short ? { short: 1 } : {}) };
+      }),
     };
   }
   return out;

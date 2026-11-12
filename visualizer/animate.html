@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Route Animation</title>
+<title>🚌 Route Animation</title>
 <style>
   :root {
     color-scheme: light;
@@ -52,15 +52,7 @@
     <label>Day <select id="day"><option>Weekday</option><option>Saturday</option><option>Sunday</option></select></label>
     <label>Garage <select id="garage"><option value="All">All garages</option></select></label>
     <label>Route <select id="route"></select></label>
-    <label>Period <select id="preset">
-      <option value="custom">Custom</option>
-      <option value="all">All day</option>
-      <option value="overnight">Overnight 11 PM–6 AM</option>
-      <option value="am">AM rush 6–9 AM</option>
-      <option value="midday">Midday 9 AM–3 PM</option>
-      <option value="pm">PM rush 3–6:30 PM</option>
-      <option value="evening">Evening 6:30–11 PM</option>
-    </select></label>
+    <label>Period <select id="preset"></select></label><!-- filled per day type -->
     <label>From <input class="time" id="from" value="15:00" inputmode="numeric" aria-label="From (paddle time, HH:MM)"></label>
     <label>To <input class="time" id="to" value="18:30" inputmode="numeric" aria-label="To (paddle time, HH:MM)"></label>
     <button class="primary" type="submit">Show</button>
@@ -70,7 +62,21 @@
 <script src="anim-player.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
-const PRESETS = { all: ["00:00", "30:00"], overnight: ["23:00", "30:00"], am: ["06:00", "09:00"], midday: ["09:00", "15:00"], pm: ["15:00", "18:30"], evening: ["18:30", "23:00"] };
+// time periods: weekdays have rush periods, weekends morning / afternoon instead
+const PRESET_LISTS = {
+  Weekday: [["all", "All day", "00:00", "30:00"], ["overnight", "Overnight 11 PM–6 AM", "23:00", "30:00"], ["am", "AM rush 6–9 AM", "06:00", "09:00"],
+    ["midday", "Midday 9 AM–3 PM", "09:00", "15:00"], ["pm", "PM rush 3–6:30 PM", "15:00", "18:30"], ["evening", "Evening 6:30–11 PM", "18:30", "23:00"]],
+  Weekend: [["all", "All day", "00:00", "30:00"], ["overnight", "Overnight 11 PM–6 AM", "23:00", "30:00"], ["morning", "Morning 6 AM–12 PM", "06:00", "12:00"],
+    ["afternoon", "Afternoon 12–6 PM", "12:00", "18:00"], ["evening", "Evening 6–11 PM", "18:00", "23:00"]],
+};
+let PRESETS = {};
+function fillPresets() {
+  const list = PRESET_LISTS[$("day").value === "Weekday" ? "Weekday" : "Weekend"];
+  PRESETS = Object.fromEntries(list.map(([k, , a, b]) => [k, [a, b]]));
+  $("preset").innerHTML = `<option value="custom">Custom</option>` + list.map(([k, name]) => `<option value="${k}">${name}</option>`).join("");
+  const match = Object.entries(PRESETS).find(([, [a, b]]) => a === $("from").value && b === $("to").value);
+  $("preset").value = match ? match[0] : "custom";
+}
 const parseTime = (s) => { const m = String(s).trim().match(/^(\d{1,2}):?(\d{2})$/); return m ? +m[1] * 3600 + +m[2] * 60 : null; };
 const player = AnimPlayer.create($("player"));
 let days = [];
@@ -101,7 +107,7 @@ async function show() {
 }
 $("preset").onchange = () => { const p = PRESETS[$("preset").value]; if (p) { $("from").value = p[0]; $("to").value = p[1]; } };
 for (const id of ["from", "to"]) $(id).oninput = () => { $("preset").value = "custom"; };
-$("day").onchange = loadRoutes;
+$("day").onchange = () => { fillPresets(); loadRoutes(); };
 $("garage").onchange = loadRoutes;
 $("form").onsubmit = (e) => { e.preventDefault(); show(); };
 (async () => {
@@ -109,8 +115,7 @@ $("form").onsubmit = (e) => { e.preventDefault(); show(); };
   if (h.day) $("day").value = h.day;
   if (h.from) $("from").value = h.from;
   if (h.to) $("to").value = h.to;
-  const preset = Object.entries(PRESETS).find(([, [a, b]]) => a === $("from").value && b === $("to").value);
-  $("preset").value = preset ? preset[0] : "custom";
+  fillPresets();
   days = await (await fetch("api/days")).json();
   if (h.garage) { $("garage").innerHTML = `<option>${h.garage}</option>`; $("garage").value = h.garage; }
   await loadRoutes();

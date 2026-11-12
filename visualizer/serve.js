@@ -11,6 +11,8 @@
 //   /api/route?day=Weekday&garage=All&route=49  that route's statistics and the runs that drive it
 //   /api/anim?day=Weekday&route=147&garage=All&from=54000&to=66600   buses, paths and map for the animation player
 //   /api/anim-garage?day=Weekday&garage=North Park&from=54000&to=66600   every bus from one garage, all routes
+//   /api/timeuse?day=Weekday&a=15&b=18.5      per garage: platform time in service / deadhead / garage / recovery, and pay
+//   /api/routetime?day=Weekday&garage=All&a=15&b=18.5   the same split per route, plus the rush-hour-only routes
 import http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -71,6 +73,8 @@ async function summaryFor(day, garage) {
   const result = {
     day, garage, garages: d.garages, sources: d.sources.filter((s) => garage === "All" || s.garage === garage),
     runCount: runs.length, statistics, places,
+    // every run's duty type and whether it's a swing (a quality, alongside its type): [number, dutyType, 1 = swing]
+    runKinds: runs.map((r) => [r.number, r.dutyType, r.isSwing ? 1 : 0, r.garage]),
   };
   d.stats.set(garage, result);
   return result;
@@ -92,6 +96,74 @@ async function routeFor(day, garage, route) {
     },
     runs,
   };
+}
+
+// ---------- how buses spend their time, per garage (garage comparison) ----------
+// For every run half, its platform time (Plat Start → Plat End) split into: in service, deadhead (between
+// routes or back to the start of one), garage (pullout and pull-in) and recovery (the rest: layovers, waits).
+// Only the part inside the time window counts: [a, b) in paddle hours, where a window past 24 (overnight,
+// 23 → 30) also takes the early morning before b − 24 (paddle times there run 00:00–05:59). Plus each
+// garage's paid time (pay.total; whole day only makes sense for it).
+const clock = (t) => { if (!t) return null; const [h, m, s] = String(t).split(":").map(Number); return h * 3600 + m * 60 + (s || 0); };
+const duration = (d) => (d == null ? 0 : typeof d === "string" ? clock(d) : (d.hours ?? 0) * 3600 + (d.minutes ?? 0) * 60 + (d.seconds ?? 0));
+function timeUseFor(runs, win) {
+  const segs = !win ? [[-Infinity, Infinity]] : [[win[0] * 3600, win[1] * 3600], ...(win[1] > 24 ? [[0, (win[1] - 24) * 3600]] : [])];
+  const inWin = (s, e) => segs.reduce((n, [a, b]) => n + Math.max(0, Math.min(e, b) - Math.max(s, a)), 0);
+  const out = {};
+  for (const r of runs) {
+    const g = (out[r.garage] ??= { service: 0, deadhead: 0, garage: 0, recovery: 0, pay: 0 });
+    g.pay += duration(r.pay?.total);
+    for (const h of r.halves) {
+      const trips = h.trips.filter((t) => t.begin?.time && t.end?.time);
+      if (!trips.length) continue;
+      const ps = clock(h.platformStart) ?? clock(trips[0].begin.time), pe = clock(h.platformEnd) ?? clock(trips.at(-1).end.time);
+      let moving = 0;
+      trips.forEach((t, i) => {
+        const n = inWin(clock(t.begin.time), clock(t.end.time));
+        moving += n;
+        if (t.inService) { g.service += n; return; }
+        const before = trips.slice(0, i).some((x) => x.inService), after = trips.slice(i + 1).some((x) => x.inService);
+        if ((!before && h.startType === "pullout") || (!after && h.endType === "pullin")) g.garage += n; else g.deadhead += n;
+      });
+      g.recovery += Math.max(0, inWin(ps, pe) - moving);
+    }
+  }
+  return out;
+}
+
+// The same split per route (interesting facts: most / least efficient routes). In-service time goes to the
+// trip's route; time between trips (layovers, deadheads, pullouts) goes to the route of the next in-service
+// trip, since it's spent getting ready for it; time after the half's last trip (the pull-in) to that last
+// trip's route. Also which routes are "rush hour only": no in-service trip running at any time 12–1 PM.
+function routeTimeUseFor(runs, win) {
+  const segs = !win ? [[-Infinity, Infinity]] : [[win[0] * 3600, win[1] * 3600], ...(win[1] > 24 ? [[0, (win[1] - 24) * 3600]] : [])];
+  const inWin = (s, e) => segs.reduce((n, [a, b]) => n + Math.max(0, Math.min(e, b) - Math.max(s, a)), 0);
+  const routes = {}, midday = new Set();
+  for (const r of runs) for (const h of r.halves) {
+    const trips = h.trips.filter((t) => t.begin?.time && t.end?.time);
+    const service = trips.filter((t) => t.inService && t.route);
+    if (!service.length) continue;
+    for (const t of service) if (clock(t.begin.time) < 13 * 3600 && clock(t.end.time) > 12 * 3600) midday.add(t.route);
+    // the route each moment belongs to: the next in-service trip's, else the last one's
+    const owner = (i) => (trips.slice(i).find((t) => t.inService && t.route) ?? service.at(-1)).route;
+    const add = (route, k, n) => { if (n > 0) { const o = (routes[route] ??= { service: 0, deadhead: 0, garage: 0, recovery: 0 }); o[k] += n; } };
+    const ps = clock(h.platformStart) ?? clock(trips[0].begin.time), pe = clock(h.platformEnd) ?? clock(trips.at(-1).end.time);
+    let at = ps;
+    trips.forEach((t, i) => {
+      const s = clock(t.begin.time), e = clock(t.end.time);
+      if (s > at) add(owner(i), "recovery", inWin(at, s));
+      const n = inWin(s, e);
+      if (t.inService && t.route) add(t.route, "service", n);
+      else {
+        const before = trips.slice(0, i).some((x) => x.inService), after = trips.slice(i + 1).some((x) => x.inService);
+        add(owner(i), (!before && h.startType === "pullout") || (!after && h.endType === "pullin") ? "garage" : "deadhead", n);
+      }
+      at = Math.max(at, e);
+    });
+    if (pe > at) add(service.at(-1).route, "recovery", inWin(at, pe));
+  }
+  const rushOnly = Object.keys(routes).filter((r) => !midday.has(r));
+  return { routes, rushOnly };
 }
 
 // ---------- http ----------
@@ -120,6 +192,26 @@ const server = http.createServer(async (req, res) => {
       const d = await loadDay(day);
       const runs = garage === "All" ? d.runs : d.runs.filter((r) => r.garage === garage);
       return json(res, { day, garage, ...animationFor(project, runs, route, from, to) });
+    }
+    if (p === "/api/timeuse") {
+      const day = dayParam(url);
+      if (!day) return json(res, { error: "day must be Weekday, Saturday or Sunday" }, 400);
+      const a = url.searchParams.get("a"), b = url.searchParams.get("b");
+      const win = a != null && b != null ? [Number(a), Number(b)] : null;
+      const d = await loadDay(day);
+      return json(res, { day, window: win, garages: timeUseFor(d.runs, win) });
+    }
+    if (p === "/api/routetime") {
+      const day = dayParam(url);
+      if (!day) return json(res, { error: "day must be Weekday, Saturday or Sunday" }, 400);
+      const a = url.searchParams.get("a"), b = url.searchParams.get("b");
+      const win = a != null && b != null ? [Number(a), Number(b)] : null;
+      const garage = url.searchParams.get("garage") || "All";
+      const d = await loadDay(day);
+      const { routes } = routeTimeUseFor(garage === "All" ? d.runs : d.runs.filter((r) => r.garage === garage), win);
+      // rush hour only is a quality of the route, so it's judged on every garage's whole day
+      const { rushOnly } = routeTimeUseFor(d.runs, null);
+      return json(res, { day, garage, window: win, routes, rushOnly });
     }
     if (p === "/api/anim-garage") {
       const day = dayParam(url);

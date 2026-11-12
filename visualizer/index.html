@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Run Paddle Visualizer</title>
+<title>🚌 Run Paddle Visualizer</title>
 <style>
   :root {
     color-scheme: light;
@@ -99,13 +99,18 @@
 
   .goto { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 14px 16px; margin-bottom: 16px; }
   .goto label { color: var(--ink-2); font-weight: 600; }
-  .goto select { font-size: 16px; padding: 9px 12px; min-width: 96px; }
+  .goto select, .goto input { font-size: 16px; padding: 9px 12px; min-width: 96px; }
+  .route-input { width: 7.5em; }
+  .route-msg { color: var(--ink-2); font-size: 13px; font-weight: 400; }
+  .route-msg:empty { display: none; }
   .primary {
     display: inline-block; font-size: 16px; font-weight: 600; padding: 10px 20px; border-radius: 8px;
     background: var(--accent); border: 1px solid var(--accent); color: #fff; cursor: default; user-select: none;
   }
 
   .primary-btn { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; padding: 7px 16px; }
+  /* "Route 49 has runs from multiple garages…" on a route page with one garage picked */
+  .notice { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 10px 16px; margin-bottom: 12px; border-left: 4px solid var(--accent); }
   .primary-btn:hover { background: var(--accent); filter: brightness(1.08); }
   #animStatus { margin: 4px 0 10px; }
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px; }
@@ -113,6 +118,9 @@
   .tile .label { color: var(--ink-2); }
   .tile .value { font-size: 28px; font-weight: 600; margin: 2px 0; }
   .tile .detail { color: var(--ink-2); }
+  /* "(Weekday · North Park · PM rush 3–6:30 PM)" after each module's heading, so a screenshot of it says what it shows */
+  .ctx { color: var(--muted); font-weight: 400; font-size: 0.8em; }
+  .tile .ctx { display: block; font-size: 12px; }
 
   svg text { fill: var(--ink-2); font-size: 12px; }
   .viz svg { display: block; }
@@ -134,6 +142,24 @@
   .origin-row .lab, .origin-row .n { font-size: 12px; color: var(--ink-2); }
   .origin-row .n { text-align: right; font-variant-numeric: tabular-nums; }
   .origin-row.all .segbar { height: 28px; }
+  /* garage comparison: one bar per garage */
+  .gc-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) 210px; gap: 10px; align-items: center; margin-bottom: 6px; }
+  .gc-row .lab { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gc-row .n { font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .gc-row .segbar { margin: 0; height: 24px; }
+  .gc-track { height: 24px; background: var(--wash); border-radius: 4px; position: relative; }
+  .gc-track > div { height: 100%; border-radius: 4px; min-width: 2px; }
+  .gc-pick { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; color: var(--ink-2); }
+  .gc-pick label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+  .fact-ctl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .fact-ctl select { font-size: 14px; padding: 6px 10px; }
+  .fact-more:not(:empty) { margin-top: 10px; }
+  .fact-check { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); cursor: pointer; }
+  #fEffNote:not(:empty) { margin-top: 8px; }
+  .gc-row.rank { cursor: pointer; border-radius: 6px; }
+  .gc-row.rank:hover { background: var(--wash); }
+  .gc-row.rank .lab { font-variant-numeric: tabular-nums; }
+  @media (max-width: 640px) { .gc-row { grid-template-columns: 84px minmax(0, 1fr); } .gc-row .n { grid-column: 2; } }
 
   .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--ink-2); font-size: 12px; align-items: center; }
   .legend .key { display: inline-block; width: 18px; height: 0; border-top: 2px solid; margin-right: 6px; vertical-align: 3px; }
@@ -146,10 +172,15 @@
   .pane-head h2 { font-size: 20px; font-weight: 600; margin: 0 8px 0 4px; }
   .route-kind { font-size: 13px; font-weight: 600; color: var(--ink-2); border: 1px solid var(--border); background: var(--wash); border-radius: 999px; padding: 3px 10px; }
   .pane-pick { color: var(--ink-2); font-weight: 600; display: inline-flex; align-items: center; gap: 8px; }
-  .pane-pick select { font-size: 16px; padding: 7px 10px; min-width: 88px; font-weight: 600; }
+  .pane-pick select, .pane-pick input { font-size: 16px; padding: 7px 10px; min-width: 88px; font-weight: 600; }
   /* comparing: two routes side by side, split by a line; stacked on narrow screens */
   .panes.compare { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; }
   .panes.compare .route-pane { min-width: 0; padding: 0 16px; }
+  /* the two halves share rows (subgrid), so each module starts level with the same module on the other side,
+     even when one is taller (more rows); a module hidden on one side keeps its (empty) row */
+  .panes.compare .route-pane { display: grid; grid-row: span 8; grid-template-rows: subgrid; grid-template-columns: minmax(0, 1fr); align-content: start; }
+  .panes.compare .route-pane > * { min-width: 0; } /* a zoomed string graph scrolls inside its card instead of widening the half */
+  .panes.compare .route-pane > .hidden { display: block !important; visibility: hidden; height: 0; min-height: 0; padding: 0; margin: 0; border: 0; overflow: hidden; }
   .panes.compare .route-pane:first-child { padding-left: 0; border-right: 1px solid var(--axis); }
   .panes.compare .route-pane:last-child { padding-right: 0; }
   .panes.compare .pane-head { position: sticky; top: 0; z-index: 3; background: var(--page); padding: 8px 0; margin-bottom: 8px; }
@@ -167,6 +198,7 @@
   .facts dt { color: var(--ink-2); font-size: 12px; }
   .facts dd { margin: 0; font-size: 20px; font-weight: 600; }
   .facts dd .small { font-size: 12px; font-weight: 400; display: block; }
+  .eff-facts { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
   .by-garage { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink-2); }
 
   .segbar { display: flex; gap: 2px; height: 28px; margin: 4px 0 12px; }
@@ -227,7 +259,7 @@
       <button type="button" data-day="Saturday" aria-pressed="false">Saturday</button>
       <button type="button" data-day="Sunday" aria-pressed="false">Sunday</button>
     </div>
-    <label>Garage <select id="garageSelect"><option value="All">All garages</option></select></label>
+    <label id="garageCtl">Garage <select id="garageSelect"><option value="All">All garages</option></select></label>
     <span class="spacer"></span>
     <label class="overview-only">Sort
       <select id="sortSelect">
@@ -242,14 +274,7 @@
       <button type="button" data-clock="12" aria-pressed="false">12-hour</button>
     </div>
     <label>Time period
-      <select id="periodSelect">
-        <option value="all">All day</option>
-        <option value="overnight">Overnight (11 PM–6 AM)</option>
-        <option value="am">AM rush (6–9 AM)</option>
-        <option value="midday">Midday (9 AM–3 PM)</option>
-        <option value="pm">PM rush (3–6:30 PM)</option>
-        <option value="evening">Evening (6:30–11 PM)</option>
-      </select>
+      <select id="periodSelect"><option value="all">All day</option></select><!-- filled per day type -->
     </label>
     <div class="seg overview-only" role="group" aria-label="View">
       <button type="button" data-view="chart" aria-pressed="true">Chart</button>
@@ -259,8 +284,11 @@
 
   <form class="card goto" id="gotoForm">
     <label for="gotoSelect">Route</label>
-    <select id="gotoSelect"></select>
+    <input id="gotoSelect" class="route-input" list="routeList" autocomplete="off" spellcheck="false" placeholder="All routes" title="Type a route number and press Enter, or pick one from the list">
+    <datalist id="routeList"></datalist>
     <span class="primary" aria-hidden="true">View Detailed Statistics by Route</span>
+    <button type="button" id="gcBtn">Compare garages</button>
+    <button type="button" id="factsBtn">Interesting facts</button>
   </form>
 
   <div id="empty" class="card empty">
@@ -275,7 +303,7 @@
     <section class="card chart-card hidden" id="garageAnimCard">
       <div class="card-head">
         <div>
-          <h2 id="garageAnimTitle">Garage animation</h2>
+          <h2 id="garageAnimTitle" data-ctx>Garage Animation</h2>
           <div class="sub">Every bus from this garage on every route, moving on a map, for the day and time period picked at the top. Buses are labelled with the last 3 characters of their run number (G when pulling out or in); hover one for its route. You can save it as a GIF.</div>
         </div>
         <button type="button" class="primary-btn" id="garageAnimGo">Generate animation</button>
@@ -287,7 +315,7 @@
     <section class="card chart-card" id="chartCard">
       <div class="card-head">
         <div>
-          <h2 id="chartTitle">First and last trips by route</h2>
+          <h2 id="chartTitle" data-ctx>First and Last Trips By Route</h2>
           <div class="sub" id="chartSub">Each bar runs from a terminal's first departure to its last; dots are the departures, colored by garage. One row per direction.</div>
         </div>
         <div class="hint">Click a route for a closer look</div>
@@ -297,7 +325,7 @@
     </section>
 
     <section class="card chart-card hidden" id="tableCard">
-      <h2 id="tableTitle">First and last trips by route</h2>
+      <h2 id="tableTitle" data-ctx>First and Last Trips By Route</h2>
       <div class="sub" id="tableSub">Departure times of the first and last trip from each terminal. Click a route for a closer look.</div>
       <div class="table-scroll"><table id="table"></table></div>
     </section>
@@ -317,13 +345,112 @@
     <section class="card chart-card" id="animCard">
       <div class="card-head">
         <div>
-          <h2>Animation</h2>
+          <h2 data-ctx>Animation</h2>
           <div class="sub" id="animSub">Every bus on this route moving on a map, for the day, garage and time period picked at the top. You can save it as a GIF.</div>
         </div>
         <button type="button" class="primary-btn" id="animGo">Generate animation</button>
       </div>
       <div id="animStatus" class="sub"></div>
       <div id="animPlayer"></div>
+    </section>
+  </div>
+
+  <!-- garage comparison: every garage side by side (no route line diagrams) -->
+  <div id="garageView" class="hidden">
+    <div class="route-bar">
+      <button type="button" id="gcBack">← All routes</button>
+      <div class="gc-pick" id="gcPick" role="group" aria-label="Garages to compare"></div>
+    </div>
+    <section class="card chart-card">
+      <h2 data-ctx>Garages At A Glance</h2>
+      <div class="sub" id="gcOverviewSub"></div>
+      <div class="table-scroll"><table id="gcOverview"></table></div>
+    </section>
+    <section class="card chart-card">
+      <h2 data-ctx>Run Types By Garage</h2>
+      <div class="sub">Each garage's runs by duty type. Hover a part for its count.</div>
+      <div class="legend" id="gcTypesLegend" style="margin-bottom:10px"></div>
+      <div id="gcTypes"></div>
+    </section>
+    <section class="card chart-card">
+      <h2 data-ctx>Swings By Garage</h2>
+      <div class="sub">Share of each garage's runs that are swings (a quality of a run, so a Regular, Block or Part Time run can be one).</div>
+      <div id="gcSwings"></div>
+    </section>
+    <section class="card chart-card">
+      <h2 data-ctx>Routes Served By Garage</h2>
+      <div class="sub">Routes with at least one in-service trip from the garage; "shared" routes are also run by another garage then. Hover a bar for the list.</div>
+      <div id="gcRoutes"></div>
+    </section>
+    <section class="card chart-card">
+      <h2 data-ctx>Where Trips Start From By Garage</h2>
+      <div class="sub">How each in-service trip begins: straight out of the garage (pullout), after a deadhead on the same route, coming off another route, or turning around.</div>
+      <div class="legend" id="gcStartsLegend" style="margin-bottom:10px"></div>
+      <div id="gcStarts"></div>
+    </section>
+    <section class="card chart-card">
+      <h2 data-ctx>Service Efficiency By Garage</h2>
+      <div class="sub">Share of each garage's platform time (pull-out to pull-in) spent carrying passengers, on a 0–100% scale. The last row is every garage together. Hover a bar for the hours.</div>
+      <div id="gcEff"></div>
+    </section>
+    <section class="card chart-card">
+      <h2 data-ctx>How Buses Spend Their Time By Garage</h2>
+      <div class="sub">Each garage's platform time (operators on a bus), split into carrying passengers, waiting (layovers and recovery), deadheading between routes, and driving to and from the garage. Service efficiency = share of platform time in service.</div>
+      <div class="legend" id="gcTimeLegend" style="margin-bottom:10px"></div>
+      <div id="gcTime"></div>
+      <div class="table-scroll"><table id="gcTimeTable"></table></div>
+    </section>
+  </div>
+
+  <!-- interesting facts: top 10 lists for the day, garage and time period at the top -->
+  <div id="factsView" class="hidden">
+    <div class="route-bar"><button type="button" id="factsBack">← All routes</button></div>
+    <section class="card chart-card">
+      <div class="card-head">
+        <div>
+          <h2 data-ctx id="fOriginTitle">Top 10 Routes By Trip Origin</h2>
+          <div class="sub" id="fOriginSub"></div>
+        </div>
+        <div class="fact-ctl">
+          <select id="fOrigin" aria-label="Trip origin"></select>
+          <div class="seg" role="group" aria-label="Rank by">
+            <button type="button" data-frank="count" aria-pressed="true">Most trips</button>
+            <button type="button" data-frank="share" aria-pressed="false">Highest share</button>
+          </div>
+        </div>
+      </div>
+      <div id="fOriginList"></div>
+      <div class="fact-more" data-fmore="origin"></div>
+    </section>
+    <section class="card chart-card">
+      <h2 data-ctx id="fShortTitle">Top 10 Routes With The Most Short Trips</h2>
+      <div class="sub">Trips that start or end short of a terminal (short lines and short turns), both directions together. A trip handed to another run mid-route is judged by where the bus finally ends up.</div>
+      <div id="fShortList"></div>
+      <div class="fact-more" data-fmore="short"></div>
+    </section>
+    <section class="card chart-card">
+      <h2 data-ctx id="fHourTitle">Top 10 Routes By Busiest Hour</h2>
+      <div class="sub">The most departures a route has in one direction within a single clock hour, and the frequency that works out to.</div>
+      <div id="fHourList"></div>
+      <div class="fact-more" data-fmore="hour"></div>
+    </section>
+    <section class="card chart-card">
+      <div class="card-head">
+        <div>
+          <h2 data-ctx id="fEffTitle">Top 10 Most Efficient Routes</h2>
+          <div class="sub">Share of buses' platform time spent in service. Layovers, deadheads and pullouts count toward the route of the next trip; the pull-in toward the last one. Routes with at least 10 trips in the period.</div>
+        </div>
+        <div class="fact-ctl">
+          <div class="seg" role="group" aria-label="Efficiency">
+            <button type="button" data-feff="most" aria-pressed="true">Most efficient</button>
+            <button type="button" data-feff="least" aria-pressed="false">Least efficient</button>
+          </div>
+          <label class="fact-check"><input type="checkbox" id="fNoRush"> Exclude rush hour only routes</label>
+        </div>
+      </div>
+      <div id="fEffList"></div>
+      <div class="fact-more" data-fmore="eff"></div>
+      <div class="sub" id="fEffNote"></div>
     </section>
   </div>
 </div>
@@ -369,29 +496,62 @@ function tickLabel(hr) {
   const h24 = hr % 24; return `${h24 % 12 === 0 ? 12 : h24 % 12} ${h24 < 12 ? "AM" : "PM"}`;
 }
 // ---------- time periods (by departure time) ----------
-const PERIODS = [
-  { key: "overnight", name: "Overnight", short: "Overnight", tiny: "Night", span: "11 PM–6 AM" },
-  { key: "am", name: "Morning rush", short: "AM rush", tiny: "AM", span: "6–9 AM" },
-  { key: "midday", name: "Midday", short: "Midday", tiny: "Mid", span: "9 AM–3 PM" },
-  { key: "pm", name: "Evening rush", short: "PM rush", tiny: "PM", span: "3–6:30 PM" },
-  { key: "evening", name: "Evening", short: "Evening", tiny: "Eve", span: "6:30–11 PM" },
+// Weekdays have rush periods; weekends don't, so Saturday and Sunday use morning / afternoon instead.
+// win = the hours each period covers on the chart; overnight runs 23:00 → 30:00 (6 AM), with early-morning
+// trips (before 6 AM) drawn after midnight so the night is one stretch.
+const WEEKDAY_PERIODS = [
+  { key: "overnight", name: "Overnight", short: "Overnight", span: "11 PM–6 AM", win: [23, 30] },
+  { key: "am", name: "Morning rush", short: "AM rush", span: "6–9 AM", win: [6, 9] },
+  { key: "midday", name: "Midday", short: "Midday", span: "9 AM–3 PM", win: [9, 15] },
+  { key: "pm", name: "Evening rush", short: "PM rush", span: "3–6:30 PM", win: [15, 18.5] },
+  { key: "evening", name: "Evening", short: "Evening", span: "6:30–11 PM", win: [18.5, 23] },
 ];
+const WEEKEND_PERIODS = [
+  { key: "overnight", name: "Overnight", short: "Overnight", span: "11 PM–6 AM", win: [23, 30] },
+  { key: "morning", name: "Morning", short: "Morning", span: "6 AM–12 PM", win: [6, 12] },
+  { key: "afternoon", name: "Afternoon", short: "Afternoon", span: "12–6 PM", win: [12, 18] },
+  { key: "evening", name: "Evening", short: "Evening", span: "6–11 PM", win: [18, 23] },
+];
+// switching day type keeps the nearest period
+const PERIOD_SWAP = { am: "morning", midday: "afternoon", pm: "afternoon", morning: "am", afternoon: "pm" };
+let PERIODS = WEEKDAY_PERIODS, WINDOW = {};
+function usePeriods(day) {
+  PERIODS = day === "Weekday" ? WEEKDAY_PERIODS : WEEKEND_PERIODS;
+  WINDOW = Object.fromEntries(PERIODS.map((p) => [p.key, p.win]));
+}
+usePeriods("Weekday");
 function periodOf(sec) {
   const h = (sec / 3600) % 24;
   if (h >= 23 || h < 6) return "overnight";
-  if (h < 9) return "am";
-  if (h < 15) return "midday";
-  if (h < 18.5) return "pm";
-  return "evening";
+  return PERIODS.find((p) => p.key !== "overnight" && h >= p.win[0] && h < p.win[1]).key;
 }
 // ---------- the time-period filter ----------
-// hours each period covers on the chart; overnight runs 23:00 → 30:00 (6 AM), with early-morning
-// trips (before 6 AM) drawn after midnight so the night is one stretch
-const WINDOW = { overnight: [23, 30], am: [6, 9], midday: [9, 15], pm: [15, 18.5], evening: [18.5, 23] };
 const inPeriod = (sec) => state.period === "all" || periodOf(sec) === state.period;
 const shiftOf = (sec) => (state.period === "overnight" && sec < 6 * 3600 ? 24 * 3600 : 0);
 const pos = (sec) => sec + shiftOf(sec); // where a time goes on the chart (labels keep the paddle time)
-const periodLabel = () => (state.period === "all" ? "all day" : (() => { const p = PERIODS.find((q) => q.key === state.period); return `${p.short} (${p.span})`; })());
+// Every module's heading says what it shows, so a screenshot of one module stands on its own:
+//   "CTA 50 - Average Headway By Hour - PM Rush (Weekday - North Park - 3PM-6:30PM)"
+// = the route (on route pages), the module's name, the period, then in grey the day, garage (when one is
+// picked) and the period's hours. Headings marked data-ctx get it; fillCtx runs after each render. The
+// module's own name is kept in data-base (a heading whose text a renderer resets is read again).
+const titleCase = (s) => s.replace(/\b[a-z]/g, (c) => c.toUpperCase());
+const hours = (span) => span.replace(/ (AM|PM)/g, "$1").replace(/^(\d+(?::\d+)?)–(\d+(?::\d+)?)(AM|PM)$/, "$1$3–$2$3").replace("–", "-");
+function ctxText() {
+  const p = PERIODS.find((q) => q.key === state.period);
+  return `(${[state.day, state.garage === "All" ? null : state.garage, p ? hours(p.span) : null].filter(Boolean).join(" - ")})`;
+}
+function fillCtx(root = document) {
+  const p = PERIODS.find((q) => q.key === state.period), period = p ? titleCase(p.short) : "All Day", grey = ctxText();
+  for (const el of root.querySelectorAll("[data-ctx]")) {
+    if (!el.querySelector(":scope > .ctx-main")) el.dataset.base = el.textContent.trim();
+    const route = el.closest("[data-route]")?.dataset.route ?? (el.closest("#routeView") ? state.route : null);
+    const main = [route ? `CTA ${route}` : null, el.dataset.base || null, period].filter(Boolean).join(" - ");
+    el.replaceChildren();
+    const m = document.createElement("span"); m.className = "ctx-main"; m.textContent = main;
+    const s = document.createElement("span"); s.className = "ctx"; s.textContent = grey;
+    el.append(m, " ", s);
+  }
+}const periodLabel = () => (state.period === "all" ? "all day" : (() => { const p = PERIODS.find((q) => q.key === state.period); return `${p.short} (${p.span})`; })());
 
 // the summary rows, cut down to the departures in the chosen period (rows with none are left out)
 let viewCache = { rows: null, period: null, out: null };
@@ -454,6 +614,9 @@ function compass(from, to) {
 }
 const DIR_ORDER = { Northbound: 0, Eastbound: 1, Southbound: 2, Westbound: 3 };
 const ABBR = { Northbound: "NB", Southbound: "SB", Eastbound: "EB", Westbound: "WB" };
+// A direction's name: just "Southbound" etc. (many trips start or end short of the terminal, so a
+// terminal name would mislead); the terminal only when there's no compass direction to give.
+const dirName = (r) => r.direction || `from ${r.from}`;
 // distance in km between two named places (flat-earth is plenty at city scale)
 function km(a, b) {
   const p = coords.get(a), q = coords.get(b);
@@ -467,7 +630,7 @@ function buildRows(summary) {
   const rows = [];
   for (const [route, byFrom] of Object.entries(summary.statistics.directionsByRoute)) {
     for (const [from, d] of Object.entries(byFrom)) {
-      const departures = d.departures.map((x) => ({ sec: secs(x.time), run: x.run, garage: x.garage, start: x.start }));
+      const departures = d.departures.map((x) => ({ sec: secs(x.time), run: x.run, garage: x.garage, start: x.start, fromRoute: x.fromRoute, short: !!x.short }));
       rows.push({
         route, from, toward: d.toward, trips: d.trips, freq: d.averageFrequency,
         direction: compass(from, d.toward),
@@ -531,18 +694,51 @@ const is247 = (route) => {
   return rows.length > 0 && Math.min(...rows.map((r) => r.first)) < 4 * 3600 && Math.max(...rows.map((r) => r.last)) > 26 * 3600;
 };
 
+// ---------- run types: duty type, and swing as a quality of the run ----------
+// Counts runs (all, or just the given run numbers) by duty type, with how many of each are swings.
+const DUTY_ORDER = ["Regular", "Block", "PTO"];
+const dutyName = (t) => (t === "PTO" ? "Part Time" : t); // PTO on the paddles = part-time operator
+function runMix(numbers = null) {
+  const only = numbers && new Set(numbers), by = new Map();
+  let total = 0, swings = 0;
+  for (const [num, type, swing] of state.summary?.runKinds ?? []) {
+    if (only && !only.has(num)) continue;
+    total++; swings += swing;
+    const o = by.get(type) ?? { type, runs: 0, swings: 0 };
+    o.runs++; o.swings += swing; by.set(type, o);
+  }
+  const rank = (t) => { const i = DUTY_ORDER.indexOf(t); return i === -1 ? 99 : i; };
+  return { total, swings, types: [...by.values()].sort((a, b) => rank(a.type) - rank(b.type) || a.type.localeCompare(b.type)) };
+}
+function runTypesTile(tile, numbers) {
+  const m = runMix(numbers);
+  if (!m.total) return "";
+  return tile("Run types", `${m.swings.toLocaleString()} swing${m.swings === 1 ? "" : "s"}`,
+    m.types.map((t) => `${esc(dutyName(t.type))} ${t.runs.toLocaleString()}${t.swings ? ` <span class="small">(${t.swings.toLocaleString()} swing)</span>` : ""}`).join(" · "));
+}
+function renderRunMix(P, m) {
+  const nums = [...new Set(m.trips.filter((t) => inPeriod(t.begin.sec)).flatMap((t) => t.runs))];
+  const mix = runMix(nums);
+  const pct = (n, of) => (of ? ` <span class="small">${Math.round((100 * n) / of)}%</span>` : "");
+  P.part("runMix").innerHTML = mix.total ? `
+    <thead><tr><th>Duty type</th><th class="num">Runs</th><th class="num">Swings</th></tr></thead>
+    <tbody>${mix.types.map((t) => `<tr><td>${esc(dutyName(t.type))}</td><td class="num">${t.runs}</td><td class="num">${t.swings}${pct(t.swings, t.runs)}</td></tr>`).join("")}
+      <tr><td><strong>All runs</strong></td><td class="num"><strong>${mix.total}</strong></td><td class="num"><strong>${mix.swings}</strong>${pct(mix.swings, mix.total)}</td></tr></tbody>` : "";
+}
+
 // ---------- overview: tiles ----------
 function renderTiles() {
   const rows = viewRows();
-  if (!rows.length) { $("tiles").innerHTML = `<div class="card tile"><div class="label">No trips</div><div class="detail">No trips leave in this period.</div></div>`; return; }
+  if (!rows.length) { $("tiles").innerHTML = `<div class="card tile"><div class="label" data-ctx>No trips</div><div class="detail">No trips leave in this period.</div></div>`; return; }
   if (!showEnds()) { // a time period: no first / last trip figures
     const trips = rows.reduce((a, r) => a + r.trips, 0), routes = new Set(rows.map((r) => r.route)).size;
     const runs = new Set(rows.flatMap((r) => r.departures.map((d) => d.run))).size;
-    const tile = (label, value, detail) => `<div class="card tile"><div class="label">${label}</div><div class="value">${value}</div><div class="detail">${detail}</div></div>`;
+    const tile = (label, value, detail) => `<div class="card tile"><div class="label" data-ctx>${label}</div><div class="value">${value}</div><div class="detail">${detail}</div></div>`;
     const withFreq = rows.filter((r) => r.freq != null && r.trips >= 2);
     const best = withFreq.length ? withFreq.reduce((a, b) => (b.freq < a.freq ? b : a)) : null;
     $("tiles").innerHTML = tile("Runs with a trip then", runs.toLocaleString(), `${trips.toLocaleString()} in-service trips on ${routes} routes`) +
-      (best ? tile("Most frequent", `every ${best.freq} min`, `Route ${esc(best.route)} from ${esc(best.from)}, ${best.trips} trips`) : "");
+      runTypesTile(tile, rows.flatMap((r) => r.departures.map((d) => d.run))) +
+      (best ? tile("Most frequent", `every ${best.freq} min`, `Route ${esc(best.route)} ${esc(dirName(best))}, ${best.trips} trips`) : "");
     return;
   }
   const earliest = rows.reduce((a, b) => (pos(b.first) < pos(a.first) ? b : a));
@@ -550,21 +746,22 @@ function renderTiles() {
   const span = (r) => pos(r.last) - pos(r.first);
   const shortest = rows.reduce((a, b) => (span(b) < span(a) ? b : a));
   const routes = new Set(rows.map((r) => r.route)).size;
-  const tile = (label, value, detail) => `<div class="card tile"><div class="label">${label}</div><div class="value">${value}</div><div class="detail">${detail}</div></div>`;
-  const where = (r, t) => `Route ${esc(r.route)} from ${esc(r.from)} · run ${esc(t.run)}${state.garage === "All" && t.garage ? " (" + esc(t.garage) + ")" : ""}`;
+  const tile = (label, value, detail) => `<div class="card tile"><div class="label" data-ctx>${label}</div><div class="value">${value}</div><div class="detail">${detail}</div></div>`;
+  const where = (r, t) => `Route ${esc(r.route)} ${esc(dirName(r))} · run ${esc(t.run)}${state.garage === "All" && t.garage ? " (" + esc(t.garage) + ")" : ""}`;
   const trips = rows.reduce((a, r) => a + r.trips, 0);
   const runs = state.period === "all" ? state.summary.runCount : new Set(rows.flatMap((r) => r.departures.map((d) => d.run))).size;
   $("tiles").innerHTML =
     tile(state.period === "all" ? "Runs · trips" : "Runs with a trip then", `${runs.toLocaleString()}`, `${trips.toLocaleString()} in-service trips on ${routes} routes`) +
+    runTypesTile(tile, null) +
     tile("Earliest first trip", fmt(earliest.first), where(earliest, earliest.firstTrip)) +
     tile("Latest last trip", fmt(latest.last) + (state.clock === "12" && nextDay(latest.last) ? ' <span class="small">next day</span>' : ""), where(latest, latest.lastTrip)) +
     (state.period === "all"
-      ? tile("Shortest service day", fmtSpan(span(shortest)), `Route ${esc(shortest.route)} from ${esc(shortest.from)}, ${fmt(shortest.first)}–${fmt(shortest.last)}`)
+      ? tile("Shortest service day", fmtSpan(span(shortest)), `Route ${esc(shortest.route)} ${esc(dirName(shortest))}, ${fmt(shortest.first)}–${fmt(shortest.last)}`)
       : (() => {
         const withFreq = rows.filter((r) => r.freq != null && r.trips >= 2);
         if (!withFreq.length) return "";
         const best = withFreq.reduce((a, b) => (b.freq < a.freq ? b : a));
-        return tile("Most frequent", `every ${best.freq} min`, `Route ${esc(best.route)} from ${esc(best.from)}, ${best.trips} trips`);
+        return tile("Most frequent", `every ${best.freq} min`, `Route ${esc(best.route)} ${esc(dirName(best))}, ${best.trips} trips`);
       })());
 }
 
@@ -605,7 +802,7 @@ function renderChart() {
       const dirText = el("text", { x: narrow ? 34 : 44, y: cy + 4 }, row);
       if (narrow) dirText.textContent = ABBR[r.direction] ?? "";
       else {
-        dirText.textContent = `${ABBR[r.direction] ? ABBR[r.direction] + " · " : ""}from ${r.from}`;
+        dirText.textContent = ABBR[r.direction] ?? dirName(r);
         fitText(dirText, labelW - 44 - 8);
       }
       const xa = x(r.first), xb = Math.max(x(r.last), xa + bar);
@@ -642,11 +839,10 @@ function byGarageText(deps) {
   return Object.entries(c).sort((a, b) => garageSort(a[0], b[0]));
 }
 function rowTip(r, near) {
-  const startNote = (t) => (t.from !== r.from ? `<div class="note">starts at ${esc(t.from)}</div>` : "");
+  const startNote = (t) => `<div class="note">from ${esc(t.from)}</div>`;
   const split = r.garages.length > 1 ? `<dt>Garages</dt><dd>${byGarageText(r.departures).map(([g, n]) => `<span class="swatch" style="background:${garageColor(g)}"></span>${esc(g)} ${n}`).join(" &nbsp;")}</dd>` : "";
   return `
-    <div class="t">Route ${esc(r.route)}${r.direction ? " · " + r.direction : ""}</div>
-    <div class="note" style="margin-bottom:6px">${esc(r.from)} → ${esc(r.toward)}</div>
+    <div class="t" style="margin-bottom:6px">Route ${esc(r.route)} · ${esc(dirName(r))}</div>
     <dl>
       ${showEnds() ? `<dt>First trip</dt><dd>${fmtLong(r.first)} · ${runLabel(r.firstTrip.run, r.firstTrip.garage)}${startNote(r.firstTrip)}</dd>
       <dt>Last trip</dt><dd>${fmtLong(r.last)} · ${runLabel(r.lastTrip.run, r.lastTrip.garage)}${startNote(r.lastTrip)}</dd>
@@ -676,13 +872,13 @@ function hideTip() { $("tip").style.display = "none"; }
 // ---------- overview: table ----------
 function renderTable() {
   const rows = grouped().flatMap((g) => g.rows);
-  const startCell = (sec, t, r) => `${fmtLong(sec)}<div class="small">run ${esc(t.run)}${state.garage === "All" && t.garage ? " · " + esc(t.garage) : ""}${t.from !== r.from ? " · starts at " + esc(t.from) : ""}</div>`;
+  const startCell = (sec, t, r) => `${fmtLong(sec)}<div class="small">run ${esc(t.run)}${state.garage === "All" && t.garage ? " · " + esc(t.garage) : ""} · from ${esc(t.from)}</div>`;
   const ends = showEnds();
   $("table").innerHTML = `
-    <thead><tr><th>Route</th><th>Direction</th><th>From</th><th>Toward</th><th>Garage</th>${ends ? `<th>First trip</th><th>Last trip</th>
+    <thead><tr><th>Route</th><th>Direction</th><th>Garage</th>${ends ? `<th>First trip</th><th>Last trip</th>
       <th class="num">Span</th>` : ""}<th class="num">Trips</th><th class="num">Avg. every</th></tr></thead>
     <tbody>${rows.map((r) => `<tr>
-      <td><a href="#" data-route="${esc(r.route)}">${esc(r.route)}</a></td><td>${r.direction ?? "—"}</td><td>${esc(r.from)}</td><td>${esc(r.toward)}</td>
+      <td><a href="#" data-route="${esc(r.route)}">${esc(r.route)}</a></td><td>${esc(dirName(r))}</td>
       <td>${byGarageText(r.departures).map(([g, n]) => `<div><span class="swatch" style="background:${garageColor(g)}"></span>${esc(g)}${r.garages.length > 1 ? ` <span class="small">${n}</span>` : ""}</div>`).join("")}</td>
       ${ends ? `<td>${startCell(r.first, r.firstTrip, r)}</td><td>${startCell(r.last, r.lastTrip, r)}</td>
       <td class="num">${fmtSpan(pos(r.last) - pos(r.first))}</td>` : ""}<td class="num">${r.trips}</td>
@@ -734,7 +930,10 @@ function routeModel(route, data) {
       if (i > 0) { reliefs.push({ ...pts[0], from: chain[i - 1].run, to: c.run }); pts.shift(); }
       points.push(...pts);
     });
-    trips.push({ runs: chain.map((c) => c.run), garage: garageOfRun.get(chain[0].run) ?? "", points, reliefs, begin: points[0], end: points[points.length - 1] });
+    // last piece handed over mid-route to a run that isn't here: where the trip ends isn't known
+    const lastPiece = chain[chain.length - 1];
+    const openEnd = lastPiece.last && lastPiece.half.endType === "relief" && lastPiece.half.relief?.direction !== "Terminal";
+    trips.push({ runs: chain.map((c) => c.run), garage: garageOfRun.get(chain[0].run) ?? "", points, reliefs, begin: points[0], end: points[points.length - 1], openEnd });
   }
 
   const fromOf = (t) => {
@@ -746,12 +945,30 @@ function routeModel(route, data) {
     const b0 = km(t.begin.location, B), b1 = km(t.end.location, B);
     return b1 < b0 ? A : B;
   };
+  for (const t of trips) { t.from = fromOf(t); t.toward = t.from === A ? B : A; }
+  // Short = starts or ends short of the line's ends: the terminals, plus each direction's own most common
+  // start and end when those are real ends of the line, not stops other trips pass through (as in run.js,
+  // so a one-way downtown loop like the 134's isn't all short).
+  const endsAt = {}, passes = {};
   for (const t of trips) {
-    t.from = fromOf(t);
-    t.toward = t.from === A ? B : A;
-    t.startsShort = t.begin.location !== t.from;
-    t.endsShort = t.toward !== undefined && t.end.location !== t.toward;
-    t.short = t.startsShort || t.endsShort;
+    for (const p of [t.begin, t.end]) endsAt[p.location] = (endsAt[p.location] ?? 0) + 1;
+    for (const p of t.points.slice(1, -1)) passes[p.location] = (passes[p.location] ?? 0) + 1;
+  }
+  const isEnd = (loc) => (passes[loc] ?? 0) < 0.2 * (endsAt[loc] ?? 0);
+  const commonEnd = (list, pick) => {
+    const c = {};
+    for (const t of list) { const loc = pick(t).location; if (isEnd(loc)) c[loc] = (c[loc] ?? 0) + 1; }
+    return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0];
+  };
+  for (const from of terminals) {
+    const list = trips.filter((t) => t.from === from);
+    const starts = new Set([from, commonEnd(list, (t) => t.begin)]);
+    const ends = new Set([from === A ? B : A, commonEnd(list, (t) => t.end)]);
+    for (const t of list) {
+      t.startsShort = !starts.has(t.begin.location);
+      t.endsShort = t.toward !== undefined && !t.openEnd && !ends.has(t.end.location);
+      t.short = t.startsShort || t.endsShort;
+    }
   }
   trips.sort((a, b) => a.begin.sec - b.begin.sec);
   const garages = [...new Set(trips.map((t) => t.garage))].sort(garageSort);
@@ -804,28 +1021,42 @@ function stopOrder(trips, A, B) {
 // Each pane has its own parts (found by data-part) and its own route; day, garage and period are shared.
 const PANE_HTML = `
   <div class="pane-head">
-    <label class="pane-pick hidden">Route <select data-part="pick" aria-label="Route for this side"></select></label>
-    <h2 data-part="title"></h2>
+    <label class="pane-pick hidden">Route <input data-part="pick" class="route-input" list="routeList" autocomplete="off" spellcheck="false" aria-label="Route for this side" title="Type a route number and press Enter, or pick one from the list"></label>
+    <h2 data-part="title" data-ctx></h2>
     <span class="route-kind hidden" data-part="kind">Overnight circulator</span>
     <div class="legend" data-part="garages"></div>
   </div>
+  <div class="card notice hidden" data-part="multi">
+    <span data-part="multiText"></span>
+    <button type="button" class="primary-btn" data-part="multiBtn">Switch to All Garages</button>
+  </div>
   <div class="dir-cards" data-part="dirCards"></div>
   <section class="card chart-card">
-    <h2>Where trips start from</h2>
+    <h2 data-ctx>Where Trips Start From</h2>
     <div class="sub">How each in-service trip on this route begins, by direction.</div>
     <div class="legend" data-part="originLegend" style="margin-bottom:10px"></div>
     <div data-part="originBars"></div>
     <div class="table-scroll"><table data-part="originTable"></table></div>
   </section>
   <section class="card chart-card">
-    <h2>Average Headway by hour</h2>
+    <h2 data-ctx>Average Headway By Hour</h2>
     <div class="sub">Average minutes from each departure in that hour to the next one from the same terminal, with the number of departures below. The day's last departure has no next one, so an hour with only that shows "—".</div>
     <div class="table-scroll"><table class="hours" data-part="hoursTable"></table></div>
   </section>
   <section class="card chart-card">
+    <h2 data-ctx>Runs By Duty Type</h2>
+    <div class="sub">Runs with an in-service trip on this route, by duty type. Swing is a quality of a run, not a type, so a Regular, Block or Part Time run can also be a swing.</div>
+    <div class="table-scroll"><table data-part="runMix"></table></div>
+  </section>
+  <section class="card chart-card">
+    <h2 data-ctx>Service Efficiency</h2>
+    <div class="sub">How the buses working this route spend their platform time (pull-out to pull-in). Layovers, deadheads and pullouts count toward the route of the bus's next trip; the pull-in toward its last one.</div>
+    <div data-part="eff"></div>
+  </section>
+  <section class="card chart-card">
     <div class="card-head">
       <div>
-        <h2>All trips</h2>
+        <h2 data-ctx>All Trips</h2>
         <div class="sub">One line per trip: time runs left to right, stops top to bottom, spaced by distance. Lines are colored by garage. Hover a line for its run and times.</div>
       </div>
       <div class="seg" role="group" aria-label="Zoom">
@@ -843,7 +1074,8 @@ function paneFor(side) {
     el.className = "route-pane"; el.innerHTML = PANE_HTML;
     p = panes[side] = { el, side, part: (n) => el.querySelector(`[data-part="${n}"]`) };
     // this side's own route picker
-    p.part("pick").addEventListener("change", (e) => writeHash(side === 0 ? { route: e.target.value } : { compare: e.target.value }));
+    routeInput(p.part("pick"), (r) => r && writeHash(side === 0 ? { route: r } : { compare: r }), () => (side === 0 ? state.route : state.compare));
+    p.part("multiBtn").addEventListener("click", () => writeHash({ garage: "All" }));
   }
   return p;
 }
@@ -860,10 +1092,40 @@ function layoutPanes() {
   for (const b of $("panes").querySelectorAll("[data-zoom]")) b.setAttribute("aria-pressed", String(Number(b.dataset.zoom) === state.zoom));
   return want;
 }
+// A route picker you can type in or pick from (an input with the routes in #routeList). Typing a route
+// ("49", "x49") and pressing Enter goes there; picking from the list goes at once. While it has focus
+// the box is emptied (current route shown greyed) so the list shows every route, not just matches.
+function routeInput(el, go, current, { allowEmpty = false } = {}) {
+  const blank = el.placeholder;
+  const msg = document.createElement("span"); msg.className = "route-msg"; msg.setAttribute("role", "status");
+  el.after(msg);
+  let msgTimer = 0;
+  const say = (text) => { msg.textContent = text; clearTimeout(msgTimer); if (text) msgTimer = setTimeout(() => (msg.textContent = ""), 4000); };
+  const find = (text) => {
+    const t = text.trim().replace(/^(route|cta)\s*/i, "").replace(/^#/, "").toUpperCase();
+    return t ? (state.routes ?? []).find((r) => r.toUpperCase() === t) ?? null : "";
+  };
+  const commit = () => {
+    const r = find(el.value);
+    if (r === "") { if (allowEmpty && current()) go(null); return; }
+    if (!r) { say(`No route ${el.value.trim()} on ${state.day}${state.garage === "All" ? "" : " at " + state.garage}`); el.select(); return; }
+    say(""); el.value = r; el.placeholder = blank;
+    if (r !== current()) go(r);
+    el.blur();
+  };
+  el.addEventListener("focus", () => { el.placeholder = current() ?? blank; el.value = ""; });
+  el.addEventListener("blur", () => { if (!find(el.value)) el.value = current() ?? ""; el.placeholder = blank; });
+  el.addEventListener("input", (e) => {
+    if (!e.inputType || e.inputType === "insertReplacementText") commit(); // picked from the list
+  });
+  el.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); commit(); }
+    else if (e.key === "Escape") { el.value = ""; el.blur(); }
+  });
+}
 function fillPickers(routes) {
   for (const p of panes) if (p) {
     const cur = p.side === 0 ? state.route : state.compare;
-    p.part("pick").innerHTML = routes.map((r) => `<option ${r === cur ? "selected" : ""}>${esc(r)}</option>`).join("");
     p.part("pick").value = cur ?? "";
   }
 }
@@ -872,28 +1134,42 @@ function renderRoute() {
   const list = layoutPanes();
   for (const p of list) renderPane(p);
   if (!state.compare) syncAnimation();
+  fillCtx();
+}
+
+// With one garage picked: the other garages with a trip on the route in the chosen period (from the
+// all-garages summary, state.allSummary), or [] when only the picked garage runs it then.
+function otherGarages(route) {
+  if (state.garage === "All" || state.allSummary?.day !== state.day) return [];
+  const out = new Set();
+  for (const d of Object.values(state.allSummary.statistics.directionsByRoute[route] ?? {}))
+    for (const x of d.departures) if (x.garage && x.garage !== state.garage && inPeriod(secs(x.time))) out.add(x.garage);
+  return [...out].sort(garageSort);
 }
 
 function renderPane(P) {
   const m = P.model, route = P.route;
   const rows = sortDirs(viewRows().filter((r) => r.route === route));
-  P.part("title").textContent = "Route " + route + (state.period === "all" ? "" : " · " + periodLabel());
+  P.el.dataset.route = route; P.part("title").textContent = "";
   P.part("garages").innerHTML = m.garages.length > 1 || state.garage === "All" ? garageLegend(m.garages) : "";
   P.part("kind").classList.toggle("hidden", !OVERNIGHT_CIRCULATORS.has(route));
+  // one garage picked, but other garages also run this route in the period: say so, with a way to see them all
+  const others = otherGarages(route);
+  P.part("multi").classList.toggle("hidden", !others.length);
+  if (others.length) P.part("multiText").textContent = `Route ${route} has runs from multiple garages scheduled at this time. Switch to All Garages to see them.`;
   if (!rows.length) {
     P.part("dirCards").innerHTML = `<div class="card dir-card"><h3>No trips</h3><div class="toward">Route ${esc(route)} has no trips leaving in ${esc(periodLabel())}.</div></div>`;
-    for (const n of ["originLegend", "originBars", "originTable", "hoursTable", "graphs", "graphLegend"]) P.part(n).innerHTML = "";
+    for (const n of ["originLegend", "originBars", "originTable", "hoursTable", "runMix", "eff", "graphs", "graphLegend"]) P.part(n).innerHTML = "";
     return;
   }
 
   // --- first / last trip per direction (or "24/7 route") ---
   const allDay247 = showEnds() && is247(route);
   const shortCount = (from) => m.trips.filter((t) => t.from === from && t.short && inPeriod(t.begin.sec)).length;
-  const startNote = (t, r) => `<span class="small">${runLabel(t.run, t.garage)}${t.from !== r.from ? " · starts at " + esc(t.from) : ""}</span>`;
+  const startNote = (t) => `<span class="small">${runLabel(t.run, t.garage)} · from ${esc(t.from)}</span>`;
   P.part("dirCards").innerHTML = rows.map((r) => `
     <div class="card dir-card">
-      <h3>${r.direction ? r.direction + " · " : ""}from ${esc(r.from)}</h3>
-      <div class="toward">toward ${esc(r.toward)}</div>
+      <h3 data-ctx>${esc(dirName(r))}</h3>
       <dl class="facts">
         ${allDay247 ? `<div><dt>Service</dt><dd>24/7 route</dd></div>`
           : showEnds() ? `<div><dt>First trip</dt><dd>${fmtLong(r.first)}${startNote(r.firstTrip, r)}</dd></div>
@@ -906,7 +1182,45 @@ function renderPane(P) {
 
   renderOrigins(P, rows);
   renderHours(P, rows, m);
+  renderRunMix(P, m);
+  renderEfficiency(P, route);
   renderGraphs(P, m, rows);
+}
+
+// --- service efficiency: this route's platform time split (api/routetime, as on the facts page) ---
+function renderEfficiency(P, route) {
+  const box = P.part("eff");
+  const rt = facts.rtKey === `${state.day}|${state.garage}|${state.period}` ? facts.rt : null;
+  if (!rt) { box.innerHTML = `<div class="sub">Loading…</div>`; loadRouteTime().then(() => { if (state.route && !state.fview && !state.gview) renderRoute(); },
+    (e) => { box.innerHTML = `<div class="sub">Couldn't load: ${esc(e.message)}</div>`; }); return; }
+  const t = rt.routes[route];
+  const total = (x) => TIME_PARTS.reduce((a, [k]) => a + (x?.[k] ?? 0), 0);
+  if (!t || !total(t)) { box.innerHTML = `<div class="sub">No platform time on this route in ${esc(periodLabel())}.</div>`; return; }
+  const h1 = (s) => `${(s / 3600).toFixed(1)} h`, all = total(t), pct = pctOf(t.service, all);
+  // compared with the other routes in the same period (and garage): routes with enough trips to rank
+  const tripsOf = new Map();
+  for (const r of viewRows()) tripsOf.set(r.route, (tripsOf.get(r.route) ?? 0) + r.departures.length);
+  const ranked = Object.entries(rt.routes).filter(([r, x]) => (tripsOf.get(r) ?? 0) >= SHARE_MIN_TRIPS && total(x) > 0)
+    .map(([r, x]) => [r, pctOf(x.service, total(x))]).sort((a, b) => b[1] - a[1] || routeOrder(a[0], b[0]));
+  const place = ranked.findIndex(([r]) => r === route);
+  const sum = Object.values(rt.routes).reduce((a, x) => { for (const [k] of TIME_PARTS) a[k] = (a[k] ?? 0) + (x[k] ?? 0); return a; }, {});
+  const avg = pctOf(sum.service, total(sum)), diff = Math.round(10 * (pct - avg)) / 10;
+  const scope = state.garage === "All" ? "all routes" : `all ${state.garage} routes`;
+  const rush = rt.rushOnly.includes(route);
+  box.innerHTML = `
+    <dl class="facts eff-facts">
+      <div><dt>In service</dt><dd>${pct}%<span class="small">${diff === 0 ? "same as" : `${Math.abs(diff)} points ${diff > 0 ? "above" : "below"}`} ${esc(scope)} (${avg}%)</span></dd></div>
+      <div><dt>Rank</dt><dd>${place === -1 ? "—" : `${place + 1} of ${ranked.length}`}<span class="small">${place === -1 ? `fewer than ${SHARE_MIN_TRIPS} trips, not ranked` : "most efficient first"}</span></dd></div>
+      <div><dt>Platform time</dt><dd>${h1(all)}<span class="small">${rush ? "rush hour only route" : "bus-hours"}</span></dd></div>
+    </dl>
+    <div class="legend" style="margin:12px 0 8px">${legendOf(TIME_PARTS.map(([, name, , bg]) => [name, bg]))}</div>
+    <div class="segbar" role="img" aria-label="${esc(TIME_PARTS.map(([k, name]) => `${name} ${pctOf(t[k], all)}%`).join(", "))}">${TIME_PARTS.filter(([k]) => t[k] > 0).map(([k, name, , bg, ink]) =>
+      `<div style="flex:${t[k]} 1 0;background:${bg};color:${ink}" title="${esc(name)}: ${h1(t[k])} (${pctOf(t[k], all)}%)"><span>${pctOf(t[k], all)}%</span></div>`).join("")}</div>
+    <div class="table-scroll" style="margin-top:12px"><table>
+      <thead><tr>${TIME_PARTS.map(([, name, what]) => `<th class="num" title="${esc(what)}">${name}</th>`).join("")}<th class="num">Platform</th></tr></thead>
+      <tbody><tr>${TIME_PARTS.map(([k]) => `<td class="num">${h1(t[k])} <span class="small">${pctOf(t[k], all)}%</span></td>`).join("")}<td class="num">${h1(all)}</td></tr></tbody>
+    </table></div>`;
+  requestAnimationFrame(() => { for (const d of box.querySelectorAll(".segbar > div")) { const sp = d.firstChild; if (sp.offsetWidth + 16 > d.clientWidth) sp.style.visibility = "hidden"; } });
 }
 
 // --- animation (drawn in the browser by anim-player.js) ---
@@ -963,21 +1277,43 @@ function originBar(c, label, cls = "") {
   const aria = `${label}: ` + parts.map((p) => `${p.name} ${p.n} (${pctText(p.n, c.total)})`).join(", ");
   return `<div class="origin-row ${cls}"><div class="lab">${label}</div>
     <div class="segbar" role="img" aria-label="${esc(aria)}">${parts.map((p) =>
-      `<div style="flex:${p.n} 1 0;background:${p.bg};color:${p.ink}" title="${esc(p.name)}: ${p.n} trips, ${pctText(p.n, c.total)}"><span>${pctText(p.n, c.total)}</span></div>`).join("")}</div>
+      // "From another route" gets a hover breakdown by route (fromRouteTip); the others a plain title
+      p.k === "fromOtherRoute"
+        ? `<div style="flex:${p.n} 1 0;background:${p.bg};color:${p.ink};cursor:default" data-from-other><span>${pctText(p.n, c.total)}</span></div>`
+        : `<div style="flex:${p.n} 1 0;background:${p.bg};color:${p.ink}" title="${esc(p.name)}: ${p.n} trips, ${pctText(p.n, c.total)}"><span>${pctText(p.n, c.total)}</span></div>`).join("")}</div>
     <div class="n">${c.total} trips</div></div>`;
+}
+// Tooltip for the "From another route" part of a direction's bar: how many trips came from each route.
+function fromRouteTip(r, route) {
+  const deps = r.departures.filter((d) => d.start === "fromOtherRoute");
+  const by = new Map();
+  for (const d of deps) { const k = d.fromRoute ?? "?"; by.set(k, (by.get(k) ?? 0) + 1); }
+  const list = [...by.entries()].sort((a, b) => b[1] - a[1] || routeOrder(a[0], b[0]));
+  const pct = (n) => `${Math.round((100 * n) / deps.length)}%`;
+  return `
+    <div class="t">Route ${esc(route)} ${esc(dirName(r))}: ${deps.length} trip${deps.length === 1 ? "" : "s"} from another route</div>
+    <dl>${list.map(([k, n]) => `<dt>From ${esc(k)}</dt><dd>${n} trip${n === 1 ? "" : "s"} <span class="small">${pct(n)}</span></dd>`).join("")}</dl>`;
 }
 function renderOrigins(P, rows) {
   P.part("originLegend").innerHTML = ORIGINS.map(([, name, , bg]) => `<span><span class="swatch" style="background:${bg}"></span>${name}</span>`).join("");
   const perDir = rows.map((r) => ({ r, all: originCounts(r.departures) }));
   P.part("originBars").innerHTML = perDir.map(({ r, all }) => {
-    let html = `<div class="origin-dir"><h3 style="margin-bottom:6px">${r.direction ? r.direction + " · " : ""}from ${esc(r.from)}</h3>`;
+    let html = `<div class="origin-dir"><h3 style="margin-bottom:6px">${esc(dirName(r))}</h3>`;
     const p = PERIODS.find((q) => q.key === state.period);
     html += originBar(all, p ? `${p.short}<div class="small">${p.span}</div>` : "All day", "all");
     return html + "</div>";
   }).join("");
   // hide a percentage that doesn't fit its block
   for (const d of P.part("originBars").querySelectorAll(".segbar > div")) { const sp = d.firstChild; if (sp.offsetWidth + 16 > d.clientWidth) sp.style.visibility = "hidden"; }
-  const dirHead = (r) => `${ABBR[r.direction] ? ABBR[r.direction] + " · " : ""}from ${esc(r.from)}`;
+  // hover "From another route": which routes the buses came from, and the runs
+  P.part("originBars").querySelectorAll(".origin-dir").forEach((el, i) => {
+    const seg = el.querySelector("[data-from-other]");
+    if (!seg) return;
+    const html = fromRouteTip(perDir[i].r, P.route);
+    seg.addEventListener("mousemove", (ev) => showTip(ev, html));
+    seg.addEventListener("mouseleave", hideTip);
+  });
+  const dirHead = (r) => esc(ABBR[r.direction] ?? dirName(r));
   P.part("originTable").innerHTML = `
     <thead><tr><th>Trip starts</th>${perDir.map(({ r }) => `<th class="num">${dirHead(r)}</th>`).join("")}<th>Meaning</th></tr></thead>
     <tbody>${ORIGINS.map(([k, name, what, bg]) => `<tr><td><span class="swatch" style="background:${bg}"></span>${name}</td>
@@ -1017,9 +1353,9 @@ function renderHours(P, rows, m) {
     return v.length ? Math.max(...v) : null;
   };
   P.part("hoursTable").innerHTML = `
-    <thead><tr><th>From</th>${all.map((h) => `<th>${tickLabel(h)}</th>`).join("")}</tr></thead>
+    <thead><tr><th>Direction</th>${all.map((h) => `<th>${tickLabel(h)}</th>`).join("")}</tr></thead>
     <tbody>
-      ${byDir.map(({ r, c, avg }) => `<tr><td>${ABBR[r.direction] ? `<strong>${ABBR[r.direction]}</strong> · ` : ""}${esc(r.from)}</td>${all.map((h) => c[h]
+      ${byDir.map(({ r, c, avg }) => `<tr><td><strong>${esc(dirName(r))}</strong></td>${all.map((h) => c[h]
         ? `<td title="${c[h]} departure${c[h] === 1 ? "" : "s"}">${avg[h] ?? "—"}<span class="small">${c[h]} trip${c[h] === 1 ? "" : "s"}</span></td>`
         : `<td class="small">—</td>`).join("")}</tr>`).join("")}
       <tr><td>Buses on the route <span class="small">most at once</span></td>${all.map((h) => `<td>${peakAt(h) ?? '<span class="small">—</span>'}</td>`).join("")}</tr>
@@ -1027,6 +1363,17 @@ function renderHours(P, rows, m) {
 }
 
 // --- string graphs ---
+// The stops down a string graph, always the same way round on the map: a route running mostly north–south
+// has its north end at the top, one running mostly east–west its west end at the top (so the 49 and X49,
+// or two compared routes, read the same way).
+function stopsTopToBottom(P, m) {
+  if (m.order.length < 2) return m.order;
+  const a = coords.get(m.order[0]), b = coords.get(m.order.at(-1));
+  if (!a || !b) return m.order;
+  const dy = b.lat - a.lat, dx = (b.lon - a.lon) * Math.cos((a.lat * Math.PI) / 180);
+  const flip = Math.abs(dy) >= Math.abs(dx) ? dy > 0 : dx < 0; // the end that should be on top is at the bottom
+  return flip ? [...m.order].reverse() : m.order;
+}
 function renderGraphs(P, m, rows) {
   const host = P.part("graphs");
   host.innerHTML = "";
@@ -1034,7 +1381,7 @@ function renderGraphs(P, m, rows) {
     `<span><span class="ring" style="background:var(--ink-2)"></span>Where a short trip starts or ends mid-route</span>
      <span><span class="ring" style="border:1.5px solid var(--ink-2)"></span>Relief: another run takes over</span>`;
   if (!m.trips.length) return;
-  const order = m.order;
+  const order = stopsTopToBottom(P, m);
   const cum = [0];
   for (let i = 1; i < order.length; i++) cum.push(cum[i - 1] + Math.max(km(order[i - 1], order[i]), 0.05));
   const total = cum[cum.length - 1] || 1;
@@ -1063,7 +1410,7 @@ function renderGraphs(P, m, rows) {
     const card = document.createElement("div");
     card.style.marginBottom = "18px";
     const short = trips.filter((t) => t.short).length;
-    card.innerHTML = `<h3 style="margin-bottom:6px">${r.direction ? r.direction + " · " : ""}from ${esc(r.from)} <span class="small" style="font-weight:400">→ ${esc(r.toward)} · ${trips.length} trips, ${short} short</span></h3>`;
+    card.innerHTML = `<h3 style="margin-bottom:6px">${esc(dirName(r))} <span class="small" style="font-weight:400">${trips.length} trips, ${short} short</span></h3>`;
     const g = document.createElement("div");
     g.className = "graph viz";
     card.appendChild(g);
@@ -1085,7 +1432,7 @@ function renderGraphs(P, m, rows) {
     wrap.className = "plot";
     g.appendChild(wrap);
     const svg = el("svg", { width: plotW, height: H, role: "img",
-      "aria-label": `String graph of route ${P.route} trips from ${r.from}` }, wrap);
+      "aria-label": `String graph of route ${P.route} ${dirName(r)} trips` }, wrap);
     for (const loc of order) el("line", { x1: 0, x2: plotW, y1: yOf.get(loc), y2: yOf.get(loc), class: "stopline" }, svg);
     for (let hr = h0; hr <= h1; hr++) {
       const gx = x(hr * 3600);
@@ -1135,18 +1482,279 @@ function tripTip(t) {
 }
 
 // =====================================================================
+// Garage comparison: every garage side by side, for the day and time period at the top
+// =====================================================================
+// Trips, routes, run types, swings and trip starts come from the all-garages summary (each departure
+// knows its garage and run); how buses spend their time from api/timeuse (platform time split by the server).
+const RUN_TYPE_COLORS = { Regular: ["var(--g1)", "#fff"], Block: ["var(--g4)", "#0b0b0b"], PTO: ["var(--g5)", "#fff"] };
+const TIME_PARTS = [
+  ["service", "In service", "Carrying passengers", "var(--g1)", "#fff"],
+  ["recovery", "Layover / recovery", "On the platform but not moving: layovers at terminals, waits before and after reliefs", "var(--axis)", "var(--ink)"],
+  ["deadhead", "Deadhead", "Out of service between routes, or back to the start of a route", "var(--g4)", "#0b0b0b"],
+  ["garage", "To / from garage", "Pullouts and pull-ins", "var(--g5)", "#fff"],
+];
+const hrs = (s) => `${Math.round(s / 3600).toLocaleString()} h`;
+const pctOf = (n, of) => (of ? Math.round((1000 * n) / of) / 10 : 0);
+// a bar of parts [{ name, n, bg, ink }] for one garage, with a right-hand note
+function gcStack(g, parts, note) {
+  const total = parts.reduce((a, p) => a + p.n, 0);
+  return `<div class="gc-row"><div class="lab"><span class="swatch" style="background:${garageColor(g)}"></span>${esc(g)}</div>
+    <div class="segbar" role="img" aria-label="${esc(g)}: ${esc(parts.map((p) => `${p.name} ${pctOf(p.n, total)}%`).join(", "))}">${parts.filter((p) => p.n > 0).map((p) =>
+      `<div style="flex:${p.n} 1 0;background:${p.bg};color:${p.ink}" title="${esc(g)} · ${esc(p.name)}: ${esc(p.label ?? p.n.toLocaleString())} (${pctOf(p.n, total)}%)"><span>${pctOf(p.n, total)}%</span></div>`).join("")}</div>
+    <div class="n">${note}</div></div>`;
+}
+// a single value bar (0 … max) for one garage
+function gcValue(g, value, max, note, title) {
+  return `<div class="gc-row" title="${esc(title ?? "")}"><div class="lab"><span class="swatch" style="background:${garageColor(g)}"></span>${esc(g)}</div>
+    <div class="gc-track"><div style="width:${max ? (100 * value) / max : 0}%;background:${garageColor(g)}"></div></div>
+    <div class="n">${note}</div></div>`;
+}
+const legendOf = (items) => items.map(([name, bg]) => `<span><span class="swatch" style="background:${bg}"></span>${esc(name)}</span>`).join("");
+
+// per garage: the departures in the period, the runs, routes, types, swings, trip starts
+function garageFacts(g) {
+  const deps = [];
+  for (const r of viewRows()) for (const d of r.departures) if (d.garage === g) deps.push({ ...d, route: r.route, row: r });
+  const runNums = new Set(deps.map((d) => d.run));
+  const kinds = (state.summary.runKinds ?? []).filter((k) => k[3] === g && (state.period === "all" || runNums.has(k[0])));
+  const types = new Map();
+  for (const [, type, swing] of kinds) { const o = types.get(type) ?? { type, runs: 0, swings: 0 }; o.runs++; o.swings += swing; types.set(type, o); }
+  const rank = (t) => { const i = DUTY_ORDER.indexOf(t); return i === -1 ? 99 : i; };
+  const routes = [...new Set(deps.map((d) => d.route))].sort(routeOrder);
+  const others = new Set();
+  for (const r of viewRows()) for (const d of r.departures) if (d.garage !== g) others.add(r.route);
+  const starts = Object.fromEntries(ORIGINS.map(([k]) => [k, 0]));
+  for (const d of deps) if (d.start in starts) starts[d.start]++;
+  const first = deps.length ? deps.reduce((a, b) => (pos(b.sec) < pos(a.sec) ? b : a)) : null;
+  const last = deps.length ? deps.reduce((a, b) => (pos(b.sec) > pos(a.sec) ? b : a)) : null;
+  return { g, deps, runs: kinds.length, swings: kinds.reduce((a, k) => a + k[2], 0),
+    types: [...types.values()].sort((a, b) => rank(a.type) - rank(b.type)), routes, shared: routes.filter((r) => others.has(r)), starts, first, last };
+}
+
+const gc = { tu: null, key: null, hidden: new Set() }; // tu = api/timeuse result for gc.key (day|period)
+async function loadTimeUse() {
+  const key = `${state.day}|${state.period}`;
+  if (gc.key === key) return gc.tu;
+  const w = state.period === "all" ? "" : `&a=${WINDOW[state.period][0]}&b=${WINDOW[state.period][1]}`;
+  gc.tu = await getJSON(`api/timeuse?day=${encodeURIComponent(state.day)}${w}`);
+  gc.key = key;
+  return gc.tu;
+}
+
+function renderGarages() {
+  const all = state.days.find((d) => d.day === state.day)?.garages ?? [];
+  $("gcPick").innerHTML = `<span>Garages:</span>` + all.map((g) => `<label><input type="checkbox" data-gc="${esc(g)}" ${gc.hidden.has(g) ? "" : "checked"}>
+    <span class="swatch" style="background:${garageColor(g)}"></span>${esc(g)}</label>`).join("");
+  const list = all.filter((g) => !gc.hidden.has(g)).map(garageFacts);
+  const ends = showEnds();
+  const runsOf = (f) => `${f.runs.toLocaleString()} run${f.runs === 1 ? "" : "s"}`;
+
+  // at a glance
+  $("gcOverviewSub").textContent = ends ? "Runs, in-service trips, routes, and the first and last trip of the day for each garage."
+    : "Runs with a trip leaving in this period, those trips, and the routes they run, for each garage.";
+  $("gcOverview").innerHTML = `<thead><tr><th>Garage</th><th class="num">Runs</th><th class="num">In-service trips</th><th class="num">Routes</th>
+    ${ends ? `<th>Earliest first trip</th><th>Latest last trip</th>` : ""}</tr></thead>
+    <tbody>${list.map((f) => `<tr><td><span class="swatch" style="background:${garageColor(f.g)}"></span>${esc(f.g)}</td>
+      <td class="num">${f.runs.toLocaleString()}</td><td class="num">${f.deps.length.toLocaleString()}</td><td class="num">${f.routes.length}</td>
+      ${ends ? [f.first, f.last].map((d) => `<td>${d ? `${fmtLong(d.sec)} <span class="small">Route ${esc(d.route)} ${esc(dirName(d.row))} · run ${esc(d.run)}</span>` : "—"}</td>`).join("") : ""}</tr>`).join("")}
+    <tr><td><strong>All</strong></td><td class="num"><strong>${list.reduce((a, f) => a + f.runs, 0).toLocaleString()}</strong></td>
+      <td class="num"><strong>${list.reduce((a, f) => a + f.deps.length, 0).toLocaleString()}</strong></td>
+      <td class="num"><strong>${new Set(list.flatMap((f) => f.routes)).size}</strong></td>${ends ? "<td></td><td></td>" : ""}</tr></tbody>`;
+
+  // run types
+  const typeNames = [...new Set(list.flatMap((f) => f.types.map((t) => t.type)))].sort((a, b) => DUTY_ORDER.indexOf(a) - DUTY_ORDER.indexOf(b));
+  const typeColor = (t) => RUN_TYPE_COLORS[t] ?? ["var(--muted)", "#fff"];
+  $("gcTypesLegend").innerHTML = legendOf(typeNames.map((t) => [dutyName(t), typeColor(t)[0]]));
+  $("gcTypes").innerHTML = list.map((f) => gcStack(f.g, f.types.map((t) => ({ name: dutyName(t.type), n: t.runs, label: `${t.runs.toLocaleString()} runs`, bg: typeColor(t.type)[0], ink: typeColor(t.type)[1] })), runsOf(f))).join("");
+
+  // swings
+  const maxSw = Math.max(1, ...list.map((f) => pctOf(f.swings, f.runs)));
+  $("gcSwings").innerHTML = list.map((f) => gcValue(f.g, pctOf(f.swings, f.runs), maxSw,
+    `<strong>${pctOf(f.swings, f.runs)}%</strong> · ${f.swings.toLocaleString()} of ${runsOf(f)}`,
+    f.types.map((t) => `${dutyName(t.type)}: ${t.swings} of ${t.runs} (${pctOf(t.swings, t.runs)}%)`).join("\n"))).join("");
+
+  // routes served
+  const maxR = Math.max(1, ...list.map((f) => f.routes.length));
+  $("gcRoutes").innerHTML = list.map((f) => gcValue(f.g, f.routes.length, maxR,
+    `<strong>${f.routes.length}</strong> route${f.routes.length === 1 ? "" : "s"} · ${f.shared.length} shared`,
+    `${f.g}: ${f.routes.join(", ")}${f.shared.length ? `\nShared with another garage: ${f.shared.join(", ")}` : ""}`)).join("");
+
+  // trip starts
+  $("gcStartsLegend").innerHTML = legendOf(ORIGINS.map(([, name, , bg]) => [name, bg]));
+  $("gcStarts").innerHTML = list.map((f) => gcStack(f.g, ORIGINS.map(([k, name, , bg, ink]) => ({ name, n: f.starts[k], label: `${f.starts[k].toLocaleString()} trips`, bg, ink })),
+    `<span title="Trips that start with a pullout or after a deadhead on the same route">${f.deps.length.toLocaleString()} trips · <strong>${pctOf(f.starts.pullout + f.starts.deadheadSameRoute, f.deps.length)}%</strong> pullout/deadhead</span>`)).join("");
+
+  // time use
+  const tu = gc.tu?.garages ?? {};
+  $("gcTimeLegend").innerHTML = legendOf(TIME_PARTS.map(([, name, , bg]) => [name, bg]));
+  const plat = (t) => TIME_PARTS.reduce((a, [k]) => a + (t?.[k] ?? 0), 0);
+
+  // efficiency: one bar per garage (0–100%), then the shown garages together
+  const effTip = (name, t) => `${name}: ${hrs(t.service ?? 0)} in service of ${hrs(plat(t))} platform time\n` +
+    TIME_PARTS.slice(1).map(([k, n]) => `${n}: ${hrs(t[k] ?? 0)} (${pctOf(t[k] ?? 0, plat(t))}%)`).join("\n");
+  const together = list.reduce((a, f) => { for (const [k] of TIME_PARTS) a[k] = (a[k] ?? 0) + (tu[f.g]?.[k] ?? 0); return a; }, {});
+  const best = Math.max(...list.map((f) => pctOf(tu[f.g]?.service ?? 0, plat(tu[f.g]))));
+  $("gcEff").innerHTML = list.map((f) => { const t = tu[f.g] ?? {}, p = pctOf(t.service ?? 0, plat(t));
+    return gcValue(f.g, p, 100, `<strong>${p}%</strong>${list.length > 1 && p === best ? " · highest" : ""}`, effTip(f.g, t)); }).join("") +
+    (list.length > 1 ? `<div class="gc-row" title="${esc(effTip(list.length === all.length ? "All garages" : "Shown garages", together))}">
+      <div class="lab"><strong>${list.length === all.length ? "All garages" : "Shown garages"}</strong></div>
+      <div class="gc-track"><div style="width:${pctOf(together.service ?? 0, plat(together))}%;background:var(--ink-2)"></div></div>
+      <div class="n"><strong>${pctOf(together.service ?? 0, plat(together))}%</strong></div></div>` : "");
+  $("gcTime").innerHTML = list.map((f) => { const t = tu[f.g] ?? {};
+    return gcStack(f.g, TIME_PARTS.map(([k, name, , bg, ink]) => ({ name, n: t[k] ?? 0, label: hrs(t[k] ?? 0), bg, ink })),
+      `Service efficiency <strong>${pctOf(t.service ?? 0, plat(t))}%</strong>`); }).join("");
+  $("gcTimeTable").innerHTML = `<thead><tr><th>Garage</th>${TIME_PARTS.map(([, name, what]) => `<th class="num" title="${esc(what)}">${name}</th>`).join("")}
+      <th class="num">Platform</th><th class="num">Service efficiency</th>${ends ? `<th class="num">Paid</th><th class="num" title="In-service hours for every paid hour">In service per paid hour</th>` : ""}</tr></thead>
+    <tbody>${list.map((f) => { const t = tu[f.g] ?? {}; const p = plat(t);
+      return `<tr><td><span class="swatch" style="background:${garageColor(f.g)}"></span>${esc(f.g)}</td>
+        ${TIME_PARTS.map(([k]) => `<td class="num">${hrs(t[k] ?? 0)} <span class="small">${pctOf(t[k] ?? 0, p)}%</span></td>`).join("")}
+        <td class="num">${hrs(p)}</td><td class="num"><strong>${pctOf(t.service ?? 0, p)}%</strong></td>
+        ${ends ? `<td class="num">${hrs(t.pay ?? 0)}</td><td class="num">${t.pay ? (Math.round((100 * t.service) / t.pay) / 100).toFixed(2) : "—"}</td>` : ""}</tr>`; }).join("")}</tbody>`;
+  // hide a percentage that doesn't fit its block
+  for (const d of $("garageView").querySelectorAll(".segbar > div")) { const sp = d.firstChild; if (sp.offsetWidth + 16 > d.clientWidth) sp.style.visibility = "hidden"; }
+  fillCtx();
+}
+$("gcPick").addEventListener("change", (e) => {
+  const g = e.target.dataset?.gc;
+  if (!g) return;
+  if (e.target.checked) gc.hidden.delete(g); else gc.hidden.add(g);
+  renderGarages();
+});
+$("gcBtn").addEventListener("click", () => writeHash({ gview: true, fview: false, route: null, compare: null, garage: "All" }));
+$("gcBack").addEventListener("click", () => writeHash({ gview: false }));
+
+// =====================================================================
+// Interesting facts: top 10 lists, for the day, garage and time period at the top
+// =====================================================================
+const facts = { origin: "pullout", rank: "count", eff: "most", noRush: false, all: { origin: false, short: false, hour: false, eff: false },
+  rt: null, rtKey: null }; // rt = api/routetime result for rtKey (day|garage|period)
+async function loadRouteTime() {
+  const key = `${state.day}|${state.garage}|${state.period}`;
+  if (facts.rtKey === key) return facts.rt;
+  const w = state.period === "all" ? "" : `&a=${WINDOW[state.period][0]}&b=${WINDOW[state.period][1]}`;
+  const rt = await getJSON(`api/routetime?day=${encodeURIComponent(state.day)}&garage=${encodeURIComponent(state.garage)}${w}`);
+  facts.rt = rt; facts.rtKey = key;
+  return rt;
+}
+// each list shows its top 10 unless "Show all" is on; the heading and the button follow
+function factList(which, title, list, key) {
+  const sorted = list.sort((a, b) => key(b) - key(a) || routeOrder(a.route, b.route));
+  const all = facts.all[which];
+  $(title.id).textContent = `${all ? "All" : "Top 10"} ${title.text}`;
+  const more = document.querySelector(`[data-fmore="${which}"]`);
+  more.innerHTML = sorted.length > 10
+    ? `<button type="button" data-fmore-btn="${which}">${all ? "Show top 10" : `Show all ${sorted.length} routes`}</button>` : "";
+  return all ? sorted : sorted.slice(0, 10);
+}
+const SHARE_MIN_TRIPS = 10; // ranking by share only counts routes with at least this many trips (else 1 of 1 = 100%)
+// one ranked row: "1  Route 146" | bar | note; click it to open the route
+function rankRow(i, route, value, max, color, note, title = "") {
+  return `<div class="gc-row rank" data-open-route="${esc(route)}" title="${esc(title)}">
+    <div class="lab">${i + 1}. Route ${esc(route)}</div>
+    <div class="gc-track"><div style="width:${max ? (100 * value) / max : 0}%;background:${color}"></div></div>
+    <div class="n">${note}</div></div>`;
+}
+const noneYet = `<div class="sub">No trips in this period.</div>`;
+function renderFacts() {
+  // per route: its departures in the period, both directions together
+  const byRoute = new Map();
+  for (const r of viewRows()) { if (!byRoute.has(r.route)) byRoute.set(r.route, []); byRoute.get(r.route).push(r); }
+  const routes = [...byRoute.entries()].map(([route, dirs]) => ({ route, dirs, deps: dirs.flatMap((r) => r.departures) }));
+
+  // --- trip origin ---
+  if (!$("fOrigin").options.length) $("fOrigin").innerHTML = ORIGINS.map(([k, name]) => `<option value="${k}">${name}</option>`).join("");
+  $("fOrigin").value = facts.origin;
+  document.querySelectorAll("[data-frank]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.frank === facts.rank)));
+  const [, oName, oWhat, oColor] = ORIGINS.find(([k]) => k === facts.origin);
+  $("fOriginSub").textContent = `${oWhat}. ` + (facts.rank === "count" ? "Ranked by number of trips." : `Ranked by share of the route's trips (routes with at least ${SHARE_MIN_TRIPS} trips).`);
+  const origin = routes.map((x) => { const n = x.deps.filter((d) => d.start === facts.origin).length; return { ...x, n, share: pctOf(n, x.deps.length) }; })
+    .filter((x) => x.n > 0 && (facts.rank === "count" || x.deps.length >= SHARE_MIN_TRIPS));
+  const oTop = factList("origin", { id: "fOriginTitle", text: `Routes By Trip Origin: ${oName}` }, origin, (x) => (facts.rank === "count" ? x.n : x.share));
+  const oMax = Math.max(0, ...oTop.map((x) => (facts.rank === "count" ? x.n : x.share)));
+  $("fOriginList").innerHTML = oTop.length ? oTop.map((x, i) => rankRow(i, x.route, facts.rank === "count" ? x.n : x.share, oMax, oColor,
+    facts.rank === "count" ? `<strong>${x.n}</strong> trip${x.n === 1 ? "" : "s"} · ${x.share}% of ${x.deps.length}` : `<strong>${x.share}%</strong> · ${x.n} of ${x.deps.length} trips`)).join("") : noneYet;
+
+  // --- short trips ---
+  const shorts = routes.map((x) => ({ ...x, n: x.deps.filter((d) => d.short).length })).filter((x) => x.n > 0);
+  const sTop = factList("short", { id: "fShortTitle", text: "Routes With The Most Short Trips" }, shorts, (x) => x.n),sMax = Math.max(0, ...sTop.map((x) => x.n));
+  $("fShortList").innerHTML = sTop.length ? sTop.map((x, i) => rankRow(i, x.route, x.n, sMax, "var(--g4)",
+    `<strong>${x.n}</strong> short · ${pctOf(x.n, x.deps.length)}% of ${x.deps.length} trips`,
+    x.dirs.map((r) => `${dirName(r)}: ${r.departures.filter((d) => d.short).length} of ${r.departures.length} short`).join("\n"))).join("") : noneYet;
+
+  // --- busiest hour: most departures in one direction in one clock hour ---
+  const busiest = routes.map((x) => {
+    let best = null;
+    for (const r of x.dirs) {
+      const c = new Map();
+      for (const d of r.departures) { const h = Math.floor(d.sec / 3600); c.set(h, (c.get(h) ?? 0) + 1); }
+      for (const [h, n] of c) if (!best || n > best.n || (n === best.n && h < best.h)) best = { n, h, dir: r };
+    }
+    return best && { ...x, ...best };
+  }).filter(Boolean);
+  const hTop = factList("hour", { id: "fHourTitle", text: "Routes By Busiest Hour" }, busiest, (x) => x.n),hMax = Math.max(0, ...hTop.map((x) => x.n));
+  $("fHourList").innerHTML = hTop.length ? hTop.map((x, i) => rankRow(i, x.route, x.n, hMax, "var(--g1)",
+    `<strong>${x.n}</strong> ${esc(ABBR[x.dir.direction] ?? dirName(x.dir))} trips ${fmt(x.h * 3600)}–${fmt((x.h + 1) * 3600)} · every ${Math.round((10 * 60) / x.n) / 10} min`)).join("") : noneYet;
+
+  // --- efficiency: share of platform time in service ---
+  document.querySelectorAll("[data-feff]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.feff === facts.eff)));
+  $("fNoRush").checked = facts.noRush;
+  const rt = facts.rtKey === `${state.day}|${state.garage}|${state.period}` ? facts.rt : null;
+  if (!rt) {
+    $("fEffList").innerHTML = `<div class="sub">Loading…</div>`;
+    loadRouteTime().then(() => { if (state.fview) renderFacts(); });
+  } else {
+    const rush = new Set(rt.rushOnly);
+    const hrs = (s) => (s / 3600).toFixed(1);
+    const eff = routes.filter((x) => rt.routes[x.route] && x.deps.length >= SHARE_MIN_TRIPS && !(facts.noRush && rush.has(x.route))).map((x) => {
+      const t = rt.routes[x.route], total = t.service + t.recovery + t.deadhead + t.garage;
+      return { ...x, t, total, pct: pctOf(t.service, total) };
+    }).filter((x) => x.total > 0);
+    const most = facts.eff === "most";
+    const eTop = factList("eff", { id: "fEffTitle", text: most ? "Most Efficient Routes" : "Least Efficient Routes" }, eff, (x) => (most ? x.pct : -x.pct));
+    $("fEffList").innerHTML = eTop.length ? eTop.map((x, i) => rankRow(i, x.route, x.pct, 100, "var(--g2)",
+      `<strong>${x.pct}%</strong> in service · ${hrs(x.total)} bus-hours${rush.has(x.route) ? " · rush only" : ""}`,
+      `In service: ${hrs(x.t.service)} h\nLayover / recovery: ${hrs(x.t.recovery)} h\nDeadhead: ${hrs(x.t.deadhead)} h\nPullout / pull-in: ${hrs(x.t.garage)} h`)).join("") : noneYet;
+    const hidden = facts.noRush ? routes.filter((x) => rush.has(x.route)).length : 0;
+    $("fEffNote").textContent = facts.noRush
+      ? `${hidden} rush hour only route${hidden === 1 ? "" : "s"} left out (no trips running between noon and 1 PM).`
+      : "Rush hour only routes (no trips running between noon and 1 PM) are marked.";
+  }
+  fillCtx();
+}
+$("factsView").addEventListener("click", (e) => {
+  const more = e.target.closest("[data-fmore-btn]");
+  if (more) { const w = more.dataset.fmoreBtn; facts.all[w] = !facts.all[w]; renderFacts(); return; }
+  const row = e.target.closest("[data-open-route]"); if (row) openRoute(row.dataset.openRoute); });
+$("fOrigin").addEventListener("change", (e) => { facts.origin = e.target.value; renderFacts(); });
+for (const b of document.querySelectorAll("[data-frank]")) b.addEventListener("click", () => { facts.rank = b.dataset.frank; renderFacts(); });
+for (const b of document.querySelectorAll("[data-feff]")) b.addEventListener("click", () => { facts.eff = b.dataset.feff; renderFacts(); });
+$("fNoRush").addEventListener("change", (e) => { facts.noRush = e.target.checked; renderFacts(); });
+$("factsBtn").addEventListener("click", () => writeHash({ fview: true, gview: false, route: null, compare: null }));
+$("factsBack").addEventListener("click", () => writeHash({ fview: false }));
+
+// =====================================================================
 // State, loading, controls
 // =====================================================================
 function readHash() {
   const p = new URLSearchParams(location.hash.slice(1));
-  const day = p.get("day"), period = p.get("period");
-  return { day: DAYS.includes(day) ? day : "Weekday", garage: p.get("garage") || "All", route: p.get("route") || null,
+  const day = DAYS.includes(p.get("day")) ? p.get("day") : "Weekday", period = p.get("period");
+  usePeriods(day);
+  const valid = (k) => PERIODS.some((q) => q.key === k);
+  return { day, garage: p.get("garage") || "All", route: p.get("route") || null,
     compare: p.get("route") && p.get("compare") || null,
-    period: PERIODS.some((q) => q.key === period) ? period : "all" };
+    gview: !p.get("route") && p.get("view") === "garages",
+    fview: !p.get("route") && p.get("view") === "facts",
+    period: valid(period) ? period : valid(PERIOD_SWAP[period]) ? PERIOD_SWAP[period] : "all" };
 }
 function writeHash(next) {
-  const s = { day: state.day, garage: state.garage, route: state.route, compare: state.compare, period: state.period, ...next };
+  const s = { day: state.day, garage: state.garage, route: state.route, compare: state.compare, period: state.period, gview: state.gview, fview: state.fview, ...next };
+  if (s.route) s.gview = s.fview = false; // opening a route leaves the garage comparison / facts
+  if (next.gview) s.fview = false;
+  if (next.fview) s.gview = false;
+  if (s.gview) s.garage = "All";
   const p = new URLSearchParams({ day: s.day, garage: s.garage });
+  if (s.gview) p.set("view", "garages");
+  else if (s.fview) p.set("view", "facts");
   if (s.period !== "all") p.set("period", s.period);
   if (s.route) p.set("route", s.route);
   if (s.route && s.compare) p.set("compare", s.compare);
@@ -1158,6 +1766,8 @@ function openRoute(route) { writeHash({ route }); }
 function showEmpty(msg) {
   $("content").classList.add("hidden");
   $("routeView").classList.add("hidden");
+  $("garageView").classList.add("hidden");
+  $("factsView").classList.add("hidden");
   $("empty").classList.remove("hidden");
   $("emptyMsg").innerHTML = esc(msg);
 }
@@ -1169,11 +1779,18 @@ async function apply() {
   const info = state.days.find((d) => d.day === want.day);
   if (info && want.garage !== "All" && !info.garages.includes(want.garage)) want.garage = "All"; // e.g. no Forest Glen on Sunday
   Object.assign(state, want);
+  // a period swapped for the day type (PM rush → Afternoon on Saturday): show the real one in the address
+  const hp = new URLSearchParams(location.hash.slice(1));
+  if ((hp.get("period") ?? "all") !== state.period) {
+    if (state.period === "all") hp.delete("period"); else hp.set("period", state.period);
+    history.replaceState(null, "", "#" + hp.toString());
+  }
   // controls reflect the state
   document.querySelectorAll("[data-day]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.day === state.day)));
   $("garageSelect").innerHTML = `<option value="All">All garages</option>` +
     (info?.garages ?? []).map((g) => `<option ${g === state.garage ? "selected" : ""}>${esc(g)}</option>`).join("");
   $("garageSelect").value = state.garage;
+  $("periodSelect").innerHTML = `<option value="all">All day</option>` + PERIODS.map((p) => `<option value="${p.key}">${p.short} (${p.span})</option>`).join("");
   $("periodSelect").value = state.period;
   hideTip();
   try {
@@ -1190,18 +1807,44 @@ async function apply() {
     if (state.route && !routes.includes(state.route)) state.route = null;
     if (state.compare && (!state.route || !routes.includes(state.compare))) state.compare = state.route ? routes.find((r) => r !== state.route) ?? null : null;
     state.routes = routes;
-    $("gotoSelect").innerHTML = `<option value="">All Route Summary</option>` +
-      routes.map((r) => `<option ${r === state.route ? "selected" : ""}>${esc(r)}</option>`).join("");
+    $("routeList").innerHTML = routes.map((r) => `<option value="${esc(r)}"></option>`).join("");
     $("gotoSelect").value = state.route ?? "";
-    document.querySelectorAll(".overview-only").forEach((e) => e.classList.toggle("hidden", !!state.route));
+    document.querySelectorAll(".overview-only").forEach((e) => e.classList.toggle("hidden", !!state.route || state.gview || state.fview));
+    $("garageCtl").classList.toggle("hidden", state.gview); // the comparison shows every garage
+    for (const id of ["gcBtn", "factsBtn"]) $(id).classList.toggle("hidden", !!state.route || state.gview || state.fview);
+    $("garageView").classList.toggle("hidden", !state.gview);
+    $("factsView").classList.toggle("hidden", !state.fview);
+
+    if (state.fview) {
+      $("empty").classList.add("hidden"); $("content").classList.add("hidden"); $("routeView").classList.add("hidden");
+      renderFacts();
+      return;
+    }
+
+    if (state.gview) {
+      showEmpty(`Comparing ${state.day} garages…`);
+      await loadTimeUse();
+      if (ticket !== applying) return;
+      $("empty").classList.add("hidden");
+      $("garageView").classList.remove("hidden");
+      renderGarages();
+      return;
+    }
 
     if (state.route) {
       // each side's route (data cached per day / garage / route by getJSON; the model per pane)
       const sides = state.compare ? [state.route, state.compare] : [state.route];
       const need = sides.filter((r, i) => { const p = panes[i]; return !p || p.key !== `${state.day}|${state.garage}|${r}`; });
       if (need.length) showEmpty(`Loading route ${need.join(" and ")}…`);
-      const datas = await Promise.all(sides.map((r) => getJSON(`api/route?day=${encodeURIComponent(state.day)}&garage=${encodeURIComponent(state.garage)}&route=${encodeURIComponent(r)}`)));
+      const [datas, allSummary] = await Promise.all([
+        Promise.all(sides.map((r) => getJSON(`api/route?day=${encodeURIComponent(state.day)}&garage=${encodeURIComponent(state.garage)}&route=${encodeURIComponent(r)}`))),
+        // with one garage picked, the all-garages summary tells whether other garages run these routes too
+        state.garage === "All" ? null : getJSON(`api/summary?day=${encodeURIComponent(state.day)}&garage=All`),
+        // each route's platform time in the period, for the Service Efficiency card (shows its own error)
+        loadRouteTime().catch(() => null),
+      ]);
       if (ticket !== applying) return;
+      state.allSummary = allSummary;
       sides.forEach((r, i) => {
         const p = paneFor(i), key = `${state.day}|${state.garage}|${r}`;
         if (p.key !== key) { p.key = key; p.route = r; p.model = routeModel(r, datas[i]); }
@@ -1245,7 +1888,7 @@ async function generateGarageAnimation() {
 function syncGarageAnimation() {
   const one = state.garage !== "All";
   $("garageAnimCard").classList.toggle("hidden", !one);
-  $("garageAnimTitle").textContent = one ? `${state.garage} garage animation` : "Garage animation";
+  $("garageAnimTitle").textContent = one ? `${state.garage} Garage Animation` : "Garage Animation";
   if (!one) { ganim.player?.pause(); return; }
   if (ganim.key && ganim.key.split("|")[1] !== state.garage) { // another garage: start fresh
     ganim.key = null; ganim.player?.pause();
@@ -1259,10 +1902,10 @@ function renderOverview() {
   const ends = showEnds();
   for (const o of $("sortSelect").querySelectorAll("option[data-ends]")) { o.hidden = !ends; o.disabled = !ends; }
   $("sortSelect").value = ends ? state.sort : "route";
-  $("chartTitle").textContent = ends ? "First and last trips by route" : `Departures by route · ${periodLabel()}`;
+  $("chartTitle").textContent = ends ? "First and Last Trips By Route" : "Departures By Route";
   $("chartSub").textContent = ends ? "Each bar runs from a terminal's first departure to its last; dots are the departures, colored by garage. One row per direction."
     : "Dots are the departures in this period, colored by garage; the bar runs between them. One row per direction.";
-  $("tableTitle").textContent = ends ? "First and last trips by route" : `Trips by route · ${periodLabel()}`;
+  $("tableTitle").textContent = ends ? "First and Last Trips By Route" : "Trips By Route";
   $("tableSub").textContent = ends ? "Departure times of the first and last trip from each terminal. Click a route for a closer look."
     : "Trips leaving in this period and how often, from each terminal. Click a route for a closer look.";
   renderTiles();
@@ -1272,12 +1915,13 @@ function renderOverview() {
   $("chartCard").classList.toggle("hidden", state.view !== "chart");
   $("tableCard").classList.toggle("hidden", state.view !== "table");
   if (state.view === "chart") renderChart(); else renderTable();
+  fillCtx();
 }
 
 function rerender() {
   if (!state.summary) return;
   hideTip();
-  if (state.route && panes[0]?.model) renderRoute(); else renderOverview();
+  if (state.gview) renderGarages(); else if (state.fview) renderFacts(); else if (state.route && panes[0]?.model) renderRoute(); else renderOverview();
 }
 
 async function init() {
@@ -1292,7 +1936,7 @@ async function init() {
 for (const b of document.querySelectorAll("[data-day]")) b.addEventListener("click", () => writeHash({ day: b.dataset.day }));
 $("garageSelect").addEventListener("change", (e) => writeHash({ garage: e.target.value }));
 $("gotoForm").addEventListener("submit", (e) => e.preventDefault());
-$("gotoSelect").addEventListener("change", (e) => writeHash({ route: e.target.value || null }));
+routeInput($("gotoSelect"), (r) => writeHash({ route: r }), () => state.route, { allowEmpty: true });
 $("backBtn").addEventListener("click", () => writeHash({ route: null, compare: null }));
 // compare: start with the next route in the list on the right; each side then has its own picker
 $("compareBtn").addEventListener("click", () => {

@@ -38,6 +38,10 @@
   .ap-map canvas.ap-drag { cursor:grabbing; }
   .ap-zoom { position:absolute; right:10px; top:10px; display:flex; flex-direction:column; gap:4px; }
   .ap-zoom button { width:34px; height:34px; padding:0; font-size:18px; line-height:1; box-shadow:var(--shadow); }
+  .ap-compass { display:flex; justify-content:center; margin-top:4px; }
+  .ap-compass svg { width:34px; height:34px; color:var(--ink); filter:drop-shadow(0 2px 4px rgba(0,0,0,.15)); }
+  .ap-n { flex:none; color:var(--ink); transition:transform .2s; }
+  .ap-orient { display:inline-flex; align-items:center; gap:6px; }
   .ap-tip { position:absolute; pointer-events:none; background:var(--surface); border:1px solid var(--border); border-radius:8px; box-shadow:var(--shadow);
     padding:8px 10px; font-size:13px; display:none; max-width:300px; z-index:2; }
   .ap-legend { display:flex; flex-wrap:wrap; gap:6px 18px; color:var(--ink-2); margin:10px 2px 0; align-items:center; }
@@ -89,11 +93,26 @@
       route: v("route"), a: v("a"), b: v("b"), garage: v("garage"), dead: v("dead"), pill: v("pill"), pillInk: v("pill-ink"), ring: v("ring"),
       callout: v("callout"), calloutInk: v("callout-ink"), label: v("label") };
   }
-  // view = { cx, cy, scale (px per degree latitude), w, h }
-  const projector = (view) => ({ X: (lon) => (lon - view.cx) * COS * view.scale + view.w / 2, Y: (lat) => -(lat - view.cy) * view.scale + view.h / 2 });
+  // view = { cx, cy, scale (px per degree latitude), w, h, rot }
+  // rot = where north points, in degrees clockwise from up: 0 north up, 90 north right, -90 north left
+  // (Chicago is much taller than wide, so a turned map fills a wide screen better)
+  const turn = (x, y, rot) => (rot === 90 ? [-y, x] : rot === -90 ? [y, -x] : [x, y]);   // north-up offsets → screen
+  const unturn = (x, y, rot) => (rot === 90 ? [y, -x] : rot === -90 ? [-y, x] : [x, y]); // screen offsets → north-up
+  const projector = (view) => ({
+    P: (lon, lat) => { const [x, y] = turn((lon - view.cx) * COS * view.scale, -(lat - view.cy) * view.scale, view.rot || 0); return [x + view.w / 2, y + view.h / 2]; },
+  });
+  // a compass arrow pointing north, drawn into GIF frames (the page has its own)
+  function drawCompass(c, x, y, rot, C) {
+    c.save(); c.translate(x, y);
+    c.beginPath(); c.arc(0, 0, 17, 0, Math.PI * 2); c.fillStyle = C.pill; c.globalAlpha = 0.94; c.fill(); c.globalAlpha = 1;
+    c.rotate(((rot || 0) * Math.PI) / 180);
+    c.beginPath(); c.moveTo(0, -13); c.lineTo(6, 3); c.lineTo(0, 0); c.lineTo(-6, 3); c.closePath(); c.fillStyle = C.pillInk; c.fill();
+    c.font = "600 9px system-ui, sans-serif"; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText("N", 0, 9);
+    c.restore();
+  }
   function drawBase(c, data, view, C, { residential = false } = {}) {
-    const { X, Y } = projector(view), m = data.map;
-    const trace = (pts) => { c.beginPath(); for (let i = 0; i < pts.length; i++) { const x = X(pts[i][0]), y = Y(pts[i][1]); if (i) c.lineTo(x, y); else c.moveTo(x, y); } };
+    const { P } = projector(view), m = data.map;
+    const trace = (pts) => { c.beginPath(); for (let i = 0; i < pts.length; i++) { const [x, y] = P(pts[i][0], pts[i][1]); if (i) c.lineTo(x, y); else c.moveTo(x, y); } };
     c.fillStyle = C.land; c.fillRect(0, 0, view.w, view.h);
     c.lineJoin = c.lineCap = "round";
     c.fillStyle = C.park; for (const p of m.parks) if (!p.inner) { trace(p.c); c.fill(); }
@@ -115,7 +134,7 @@
       const done = new Set(), boxes = [];
       for (const s of m.streets) {
         if (!/^(primary|secondary)$/.test(s.h) || !s.n || done.has(s.n) || s.c.length < 2) continue;
-        const mid = s.c[Math.floor(s.c.length / 2)], x = X(mid[0]), y = Y(mid[1]);
+        const mid = s.c[Math.floor(s.c.length / 2)], [x, y] = P(mid[0], mid[1]);
         if (x < 30 || y < 30 || x > view.w - 30 || y > view.h - 30) continue;
         const text = s.n.replace(/^(North|South|East|West) /, "").replace(/^Jean Baptiste Point /, "");
         const w = c.measureText(text).width, b = { x: x - w / 2 - 6, y: y - 16, w: w + 12, h: 16 };
@@ -133,7 +152,7 @@
   }
   // draws every bus at time T; returns what was drawn (for hover) and the counts
   function drawBuses(c, data, view, C, T, speed) {
-    const { X, Y } = projector(view);
+    const { P } = projector(view), turnBy = ((view.rot || 0) * Math.PI) / 180;
     const brief = Math.max(150, 3 * speed);
     const placed = [], drawn = [];
     const overlaps = (r) => placed.some((q) => r.x < q.x + q.w && r.x + r.w > q.x && r.y < q.y + q.h && r.y + r.h > q.y);
@@ -146,7 +165,7 @@
       // second colour: southbound (or westbound); for a whole garage, any SB or WB trip
       const second = garageMode ? st.s.dir === "SB" || st.s.dir === "WB" : st.s.dir === data.dirPair[1];
       if (k === "trip") { if (st.moving) (second ? counts.b++ : counts.a++); else counts.wait++; } else if (k === "deadhead") counts.dead++; else counts.garage++;
-      const x = X(st.pos[0]), y = Y(st.pos[1]);
+      const [x, y] = P(st.pos[0], st.pos[1]);
       if (x < -60 || y < -60 || x > view.w + 60 || y > view.h + 60) continue;
       const garageMove = k === "pullout" || k === "pullin";
       const fill = garageMove ? C.garage : k === "deadhead" ? C.dead : second ? C.b : C.a;
@@ -156,7 +175,7 @@
       marker(c, shape, x, y, r + 2); c.fillStyle = C.ring; c.fill();
       marker(c, shape, x, y, r); c.fillStyle = fill; c.fill();
       if (st.moving) {
-        c.save(); c.translate(x, y); c.rotate(st.heading);
+        c.save(); c.translate(x, y); c.rotate(st.heading + turnBy);
         c.beginPath(); c.moveTo(r + 7, 0); c.lineTo(r + 2, -4); c.lineTo(r + 2, 4); c.closePath(); c.fillStyle = fill; c.fill(); c.restore();
       }
       c.font = "600 11px system-ui, sans-serif";
@@ -202,6 +221,7 @@
     for (const [shape, col, t] of items) { marker(c, shape, lx + 5, view.h - 26, 5); c.fillStyle = col; c.fill(); c.fillStyle = C.label; c.fillText(t, lx + 14, view.h - 22); lx += c.measureText(t).width + 30; }
     c.textAlign = "right"; c.font = "10px system-ui, sans-serif"; c.fillStyle = C.label;
     c.fillText("© OpenStreetMap contributors · CTA GTFS", view.w - 8, view.h - 8);
+    drawCompass(c, view.w - 30, 30, view.rot, C);
   }
 
   // ------------------------------------------------------------ data
@@ -255,6 +275,12 @@
   }
 
   // ------------------------------------------------------------ player
+  // a north arrow; the player turns it (CSS rotate) to match the map
+  const COMPASS_SVG = (cls) => `<svg class="ap-n ${cls}" width="22" height="22" viewBox="-11 -11 22 22" aria-hidden="true">
+    <circle r="10.5" fill="var(--surface)" stroke="var(--border)"/><path d="M0 -8.5 L4 2 L0 0 L-4 2Z" fill="currentColor"/>
+    <text y="7.6" text-anchor="middle" font-size="6" font-weight="700" fill="currentColor">N</text></svg>`;
+  const ORIENT_KEY = "ap-orientation";
+  const savedRot = () => { try { const v = +localStorage.getItem(ORIENT_KEY); return v === 90 || v === -90 ? v : 0; } catch { return 0; } };
   function create(container, { api = "api/anim" } = {}) {
     if (!document.getElementById("ap-style")) { const s = document.createElement("style"); s.id = "ap-style"; s.textContent = CSS; document.head.appendChild(s); }
     container.classList.add("ap");
@@ -264,10 +290,13 @@
         <label class="ap-dim">Speed <select class="ap-speed">${SPEEDS.map(([v, t]) => `<option value="${v}" ${v === 60 ? "selected" : ""}>${t}</option>`).join("")}</select></label>
         <span class="ap-clock">--:--</span>
         <input type="range" class="ap-scrub" min="0" max="1" step="10" value="0" aria-label="Time">
+        <label class="ap-dim ap-orient">${COMPASS_SVG("ap-orient-n")}Map <select class="ap-rot">
+          <option value="0">North up</option><option value="90">North right (turned 90°)</option><option value="-90">North left (turned 90°)</option></select></label>
       </div>
       <div class="ap-dim ap-counts" style="margin-bottom:8px">&nbsp;</div>
       <div class="ap-map"><canvas></canvas>
-        <div class="ap-zoom"><button type="button" data-z="in" aria-label="Zoom in">+</button><button type="button" data-z="out" aria-label="Zoom out">−</button><button type="button" data-z="fit" aria-label="Fit route" style="font-size:13px">⤢</button></div>
+        <div class="ap-zoom"><button type="button" data-z="in" aria-label="Zoom in">+</button><button type="button" data-z="out" aria-label="Zoom out">−</button><button type="button" data-z="fit" aria-label="Fit route" style="font-size:13px">⤢</button>
+          <span class="ap-compass" title="North">${COMPASS_SVG("ap-map-n")}</span></div>
         <div class="ap-tip"></div></div>
       <div class="ap-legend"></div>
       <div class="ap-gif">
@@ -282,8 +311,18 @@
       <p class="ap-note">The GIF covers the whole time on the slider at its own speed. "As shown on screen" keeps exactly what the map shows now (where you've panned and zoomed, and its shape); "Square" takes a square around the middle of the map, top to bottom. Buses move evenly between time points, three times as fast on expressways. Map data © OpenStreetMap contributors; route lines from CTA GTFS.</p>`;
     const q = (s) => container.querySelector(s);
     const canvas = q("canvas"), ctx = canvas.getContext("2d");
-    const st = { data: null, T: 0, playing: false, last: 0, view: { cx: -87.63, cy: 41.9, scale: 4000, w: 1, h: 1 }, base: null, C: null, drawn: [], gifAbort: null };
+    const st = { data: null, T: 0, playing: false, last: 0, view: { cx: -87.63, cy: 41.9, scale: 4000, w: 1, h: 1, rot: savedRot() }, base: null, C: null, drawn: [], gifAbort: null };
     const speed = () => +q(".ap-speed").value;
+    const showRot = () => {
+      q(".ap-rot").value = String(st.view.rot);
+      container.querySelectorAll(".ap-n").forEach((s) => { s.style.transform = `rotate(${st.view.rot}deg)`; });
+    };
+    showRot();
+    q(".ap-rot").onchange = () => {
+      st.view.rot = +q(".ap-rot").value;
+      try { localStorage.setItem(ORIENT_KEY, String(st.view.rot)); } catch { /* not kept */ }
+      showRot(); fit();
+    };
 
     function resize() {
       const dpr = window.devicePixelRatio || 1;
@@ -297,7 +336,9 @@
       const pts = st.data.map.route.length ? st.data.map.route.flat() : Object.values(st.data.lines).flatMap((l) => l.coords);
       for (const [x, y] of pts) { x1 = Math.min(x1, x); x2 = Math.max(x2, x); y1 = Math.min(y1, y); y2 = Math.max(y2, y); }
       st.view.cx = (x1 + x2) / 2; st.view.cy = (y1 + y2) / 2;
-      st.view.scale = Math.min((st.view.w - 60) / (((x2 - x1) || 0.01) * COS), (st.view.h - 60) / ((y2 - y1) || 0.01));
+      // turned 90°, east–west runs up the screen and north–south across it
+      const across = ((x2 - x1) || 0.01) * COS, along = (y2 - y1) || 0.01, sideways = st.view.rot !== 0;
+      st.view.scale = Math.min((st.view.w - 60) / (sideways ? along : across), (st.view.h - 60) / (sideways ? across : along));
       st.base = null; draw();
     }
     function draw() {
@@ -346,9 +387,11 @@
     q(".ap-scrub").oninput = () => { st.T = +q(".ap-scrub").value; draw(); };
     q(".ap-speed").onchange = draw;
     function zoomAt(f, px, py) {
-      const v = st.view, lon = v.cx + (px - v.w / 2) / (COS * v.scale), lat = v.cy - (py - v.h / 2) / v.scale;
+      // keep the map point under (px, py) where it is
+      const v = st.view, [ux, uy] = unturn(px - v.w / 2, py - v.h / 2, v.rot);
+      const lon = v.cx + ux / (COS * v.scale), lat = v.cy - uy / v.scale;
       v.scale = Math.max(800, Math.min(400000, v.scale * f));
-      v.cx = lon - (px - v.w / 2) / (COS * v.scale); v.cy = lat + (py - v.h / 2) / v.scale;
+      v.cx = lon - ux / (COS * v.scale); v.cy = lat + uy / v.scale;
       st.base = null; draw();
     }
     canvas.addEventListener("wheel", (e) => { e.preventDefault(); zoomAt(e.deltaY < 0 ? 1.25 : 0.8, e.offsetX, e.offsetY); }, { passive: false });
@@ -356,7 +399,9 @@
     let drag = null;
     canvas.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, y: e.clientY, cx: st.view.cx, cy: st.view.cy }; canvas.setPointerCapture(e.pointerId); canvas.classList.add("ap-drag"); });
     canvas.addEventListener("pointermove", (e) => {
-      if (drag) { st.view.cx = drag.cx - (e.clientX - drag.x) / (COS * st.view.scale); st.view.cy = drag.cy + (e.clientY - drag.y) / st.view.scale; st.base = null; draw(); q(".ap-tip").style.display = "none"; return; }
+      if (drag) {
+        const [ux, uy] = unturn(e.clientX - drag.x, e.clientY - drag.y, st.view.rot);
+        st.view.cx = drag.cx - ux / (COS * st.view.scale); st.view.cy = drag.cy + uy / st.view.scale; st.base = null; draw(); q(".ap-tip").style.display = "none"; return; }
       hover(e.offsetX, e.offsetY);
     });
     canvas.addEventListener("pointerup", () => { drag = null; canvas.classList.remove("ap-drag"); });
@@ -382,8 +427,8 @@
       // "as shown": exactly the map's current extent and shape, scaled to the chosen width;
       // "square": a square around the map's middle, as tall as the map view
       const view = q(".ap-gif-frame").value === "shown"
-        ? { cx: st.view.cx, cy: st.view.cy, scale: st.view.scale * (size / st.view.w), w: size, h: Math.round(size * st.view.h / st.view.w / 2) * 2 }
-        : { cx: st.view.cx, cy: st.view.cy, scale: st.view.scale * (size / st.view.h), w: size, h: size };
+        ? { cx: st.view.cx, cy: st.view.cy, rot: st.view.rot, scale: st.view.scale * (size / st.view.w), w: size, h: Math.round(size * st.view.h / st.view.w / 2) * 2 }
+        : { cx: st.view.cx, cy: st.view.cy, rot: st.view.rot, scale: st.view.scale * (size / st.view.h), w: size, h: size };
       const from = +q(".ap-scrub").min, to = +q(".ap-scrub").max, gifSpeed = +q(".ap-gif-speed").value;
       const prog = q(".ap-gif-progress"), status = q(".ap-gif-status"), btn = q(".ap-gif-go");
       st.gifAbort = new AbortController();

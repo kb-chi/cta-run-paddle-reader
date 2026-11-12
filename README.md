@@ -18,9 +18,16 @@ The **Summer 2026** paddles (via FOIA) for all seven garages, Weekday, Saturday 
 - **Route pages:**
   - where trips come from;
   - hourly headways and peak buses;
+  - service efficiency: how its buses' platform time splits, and how it ranks;
   - string graphs with reliefs marked;
   - side-by-side comparison of two routes.
-- **Animations** of scheduled service for a route or a whole garage, including deadheads and route changes. They export as GIFs.
+- **Garage comparison:** every garage side by side, for any day and period:
+  - runs, trips and routes served;
+  - run types and swing share;
+  - how trips start;
+  - service efficiency, and how platform time splits between service, layover, deadhead and garage trips.
+- **Interesting facts:** top 10 routes by how trips start (pullout, deadhead, from another route, turnaround), by short trips, by busiest hour, and by most or least efficient (share of platform time in service, optionally leaving out rush-hour-only routes: those with no trips running between noon and 1 PM), for the selected day, garage and period. Each list shows its top 10, with a button to show all.
+- **Animations** of scheduled service for a route or a whole garage, including deadheads and route changes. The map can be turned 90° (north left or right) to fit a wide screen, with a compass showing north. They export as GIFs.
 - **JSON data** for every run, its trips, reliefs and statistics.
 
 ## Samples
@@ -63,6 +70,8 @@ Open <http://localhost:5280>. Stop the server with Ctrl+C.
 
 ## Notes
 
+- **Time periods:** weekdays have AM and PM rush periods; weekends use Morning (6 AM–12 PM) and Afternoon (12–6 PM) instead. Each module's heading names the day, garage and period it shows.
+- **Swing** is a quality of a run, not a type: a Regular or Block run can also be a swing. The summary and route pages count swings by duty type.
 - **Animations:** buses move evenly between time points, 3× as fast on expressways. Out-of-service moves follow the streets in each paddle's "VIA" note.
 - **Pay** is recalculated from its parts. Mismatches with the printed pay are listed in `problems`.
 - **Times** keep counting past midnight (01:01 → `25:01:00`). A "+" on the paddle means +30 seconds.
