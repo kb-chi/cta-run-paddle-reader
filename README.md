@@ -1,6 +1,95 @@
-# Run Paddle Reader
+# CTA Run Paddle Reader
 
-Reads CTA run paddle PDFs (HASTUS "cscr60" paddles, one run per page) and saves every run as a JavaScript object in one JSON file.
+See how CTA bus service is actually scheduled to operate, built from the CTA's own operator schedules rather than the public timetable.
+
+CTA's public GTFS feed tells you when and where buses stop. It doesn't tell you how the service is put together: which bus does which trip, when one operator hands a bus off to another, or how buses get to and from the garage and between routes. That information is in the **run paddles**: the schedule sheets each bus operator works from, one per run. This project reads those paddles and turns them into data and visualizations, showing:
+
+- **Reliefs (operator hand-offs).** When and where one operator takes a bus over from another, at a terminal or mid-route, and which run takes over.
+- **Deadheads, pullouts and pull-ins.** When buses run out of service, between the garage and the route or from the end of one route to the start of another, and which streets they take. The streets come from the paddles' own "VIA" notes.
+- **How each trip begins.** Leaving the garage, coming off another route, turning around at a terminal, or deadheading back to the start.
+- **Buses actually in service.** How many buses are on each route by hour, counting a bus handed between operators only once, plus first and last trips, headways and frequency for each route and direction.
+- **Runs and pay.** Each run's halves, swings, report times and pay, with pay recalculated from its parts rather than copied from the paddle.
+
+## What's included
+
+This repository comes loaded with the **Summer 2026** paddles for all seven CTA bus garages: North Park, Kedzie, Forest Glen, Chicago, 74th, 77th and 103rd. That covers Weekday, Saturday and Sunday service. The paddles were obtained through a FOIA request. They're included both as the original PDFs (`Summer 2026 Runs/`) and already parsed (`Weekday Parsed/`, `Saturday Parsed/`, `Sunday Parsed/`). The map data and animation paths are also pre-built, so everything works right after `npm install`, with no build step.
+
+The reader works on any CTA run paddles in the same format (HASTUS "cscr60", one run per page). To look at another pick (another season's service), parse its PDFs into those folders and rebuild the animation paths. Both steps are described below.
+
+## What you can do with it
+
+- **Browse summary statistics.** A local web page shows the first and last trips, departures and frequency for every route, for any day type and time period. You can look at all garages together or one at a time.
+- **Explore a route.** For each route: where its trips come from, headways by hour, the most buses on the route at once, and string graphs of every trip. Mid-route reliefs are marked, and lines are colored by garage. Two routes can be compared side by side.
+- **Animate scheduled service.** Watch buses move on a map, either for one route or for every bus from one garage, over any time window. Pullouts and pull-ins, deadheads and moves to other routes are all shown. Animations can be exported as GIFs.
+- **Get the data itself.** Every run is saved as structured JSON with its trips, time points (with coordinates), reliefs, notes and statistics, ready for your own analysis.
+
+Everything can be filtered **route by route** or **garage by garage**.
+
+## Install and run (with the Summer 2026 data)
+
+1. Install **Node.js 22.13 or newer** from <https://nodejs.org> (the LTS version is fine), and [Git](https://git-scm.com) if you don't already have it.
+2. Download the project and install its two packages:
+
+   ```
+   git clone https://github.com/kb-chi/cta-run-paddle-reader.git
+   cd cta-run-paddle-reader
+   npm install
+   ```
+
+   (Or use **Code → Download ZIP** on GitHub, unzip it, and run `npm install` in that folder.)
+3. Start the visualizer:
+
+   ```
+   npm run viz
+   ```
+
+4. Open <http://localhost:5280> in your browser. The page opens on all weekday runs from every garage. Use the controls at the top to pick the day, garage and time period. Click a route for its details and animation, or pick one garage to animate that garage's buses. The route animation page is at <http://localhost:5280/animate.html>.
+
+Stop the server with Ctrl+C in the terminal. Nothing is sent anywhere: the server runs only on your computer.
+
+## Adding new paddles
+
+To load a different pick (another season), or to replace a garage's paddles:
+
+1. **Parse each PDF.** Do one garage and one day type at a time, writing the output into that day's folder:
+
+   ```
+   node read-paddles.js "path/to/North_Park_Weekday.pdf" -o "Weekday Parsed/North Park Weekday Runs Parsed.json"
+   ```
+
+   - Without `-o`, the file is named from the garage and day printed on the paddles and saved in the current folder; move it into `Weekday Parsed/`, `Saturday Parsed/` or `Sunday Parsed/`.
+   - A garage's paddles split across several PDFs can be given together, as long as they're all the same garage and day type.
+   - The PDFs must be the originals with real text. A scanned paddle, or one saved with "Print to PDF", is a picture and can't be read.
+   - The visualizer reads **every** `... Runs Parsed.json` file in those folders. When loading a new pick, delete or move the old season's files first, or the two will be combined.
+
+2. **Check the problems list.** Each output file ends with a `problems` list: anything the reader couldn't understand, printed pay that doesn't match the calculated pay, and time-point names it doesn't know.
+   - For an unknown time point (`Location "XYZ" is not in locations.js`), add it to `LOCATIONS` in `locations.js`, e.g. `"FOSTER WESTRN": X("Foster Ave", "Western Ave")`. Add its coordinates to `COORDS` in the same file, e.g. `"FOSTER WESTRN": { lat: 41.9759, lon: -87.6891, gtfsStopIds: [] }`.
+   - Then parse the PDF again. A time point without coordinates is still listed, but it can't be placed on the map or in the animations.
+
+3. **Update the route lines (if routes changed).** `CTA GTFS/route-shapes.json` holds the summer 2026 route lines. If the new pick reroutes or adds routes:
+   - Download [CTA's GTFS feed](https://www.transitchicago.com/downloads/sch_data/google_transit.zip).
+   - Put its `shapes.txt`, `trips.txt` and `routes.txt` into `CTA GTFS/`.
+   - Run `node "CTA GTFS/make-route-shapes.mjs"`.
+
+   Routes missing from the feed (summer-only service, for example) fall back to OpenStreetMap lines and streets.
+
+4. **Update the street map (optional).** If streets have changed, run `node osm/fetch.mjs .` (about 3 minutes) and then `node osm/compact.mjs .`.
+
+5. **Rebuild the animation paths.** This is needed whenever the parsed runs change:
+
+   ```
+   node animation/build-paths.mjs
+   ```
+
+   This takes a few minutes. It works out the line every trip and out-of-service move follows, using the paddles' "VIA" notes. If a note names a street the matcher doesn't recognize (often a misspelling on the paddle), add the correction to `animation/via.js`.
+
+6. **Restart the visualizer** (Ctrl+C, then `npm run viz`). A re-parsed file is picked up on the next page load, but new animation paths are only read when the server starts.
+
+Data sources: CTA run paddles (Summer 2026, via FOIA); CTA GTFS (route lines and stop locations); map data © OpenStreetMap contributors, ODbL.
+
+---
+
+# Reference
 
 ## Setup (once)
 
@@ -133,8 +222,13 @@ The three add up exactly to Plat Start → Plat End. The printed Plat Time round
 | `run.js` | The run object structure and helper functions (durations, times, headway, relief) |
 | `pdf-text.js` | Pulls text and its position on the page out of a PDF |
 | `paddle-parser.js` | Turns one paddle page into a run object |
-| `read-paddles.js` | The command you run: reads PDFs, writes `runs.json` |
-| `locations.js` | What each time-point name means (street names, station, landmark) and its coordinates from CTA's GTFS stops |
+| `read-paddles.js` | The command you run: reads PDFs, writes "[Garage] [Day] Runs Parsed.json" |
+| `locations.js`, `locations-gtfs.js` | What each time-point name means (street names, station, landmark) and its coordinates from CTA's GTFS stops |
 | `example-p001.js` | Run P001 entered by hand, used to check the reader |
 | `tests/` | Tests — run with `npm test` |
-| `visualizer/` | The visualizer page (`index.html`) and the server that combines the parsed files and serves it (`serve.js`, run with `npm run viz`) |
+| `Summer 2026 Runs/` | The original paddle PDFs |
+| `Weekday Parsed/`, `Saturday Parsed/`, `Sunday Parsed/` | The parsed runs, one file per garage, which the visualizer reads |
+| `visualizer/` | The visualizer page (`index.html`), the animation player (`anim-player.js`, `animate.html`) and the server that combines the parsed files and serves them (`serve.js`, `anim.js`; run with `npm run viz`) |
+| `animation/` | Builds `paths.json`, the line each bus movement follows (`build-paths.mjs`, `via.js`) |
+| `osm/` | OpenStreetMap streets, route lines and base map, and the scripts that download and compact them |
+| `CTA GTFS/` | Route lines from CTA's GTFS feed (`route-shapes.json`) and the script that makes them |
