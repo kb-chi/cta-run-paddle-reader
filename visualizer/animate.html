@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Route Animation</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --border: rgba(11, 11, 11, 0.10); --wash: rgba(11, 11, 11, 0.04); --accent: #2a78d6;
+    --shadow: 0 4px 16px rgba(0, 0, 0, 0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+      --border: rgba(255, 255, 255, 0.10); --wash: rgba(255, 255, 255, 0.05); --accent: #3987e5;
+      --shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --border: rgba(255, 255, 255, 0.10); --wash: rgba(255, 255, 255, 0.05); --accent: #3987e5;
+    --shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 20px 16px 32px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; margin-bottom: 12px; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0; }
+  header a, #status { color: var(--ink-2); }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-bottom: 12px; }
+  .controls label { color: var(--ink-2); display: inline-flex; align-items: center; gap: 6px; }
+  select, button, input { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; }
+  select, button { cursor: pointer; }
+  button:hover, select:hover { background: var(--wash); }
+  input.time { width: 6.2em; font-variant-numeric: tabular-nums; }
+  .primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .primary:hover { background: var(--accent); filter: brightness(1.08); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Route Animation</h1>
+    <a href="./">← Run Paddle Visualizer</a>
+    <span id="status"></span>
+  </header>
+  <form class="controls" id="form">
+    <label>Day <select id="day"><option>Weekday</option><option>Saturday</option><option>Sunday</option></select></label>
+    <label>Garage <select id="garage"><option value="All">All garages</option></select></label>
+    <label>Route <select id="route"></select></label>
+    <label>Period <select id="preset">
+      <option value="custom">Custom</option>
+      <option value="all">All day</option>
+      <option value="overnight">Overnight 11 PM–6 AM</option>
+      <option value="am">AM rush 6–9 AM</option>
+      <option value="midday">Midday 9 AM–3 PM</option>
+      <option value="pm">PM rush 3–6:30 PM</option>
+      <option value="evening">Evening 6:30–11 PM</option>
+    </select></label>
+    <label>From <input class="time" id="from" value="15:00" inputmode="numeric" aria-label="From (paddle time, HH:MM)"></label>
+    <label>To <input class="time" id="to" value="18:30" inputmode="numeric" aria-label="To (paddle time, HH:MM)"></label>
+    <button class="primary" type="submit">Show</button>
+  </form>
+  <div id="player"></div>
+</div>
+<script src="anim-player.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const PRESETS = { all: ["00:00", "30:00"], overnight: ["23:00", "30:00"], am: ["06:00", "09:00"], midday: ["09:00", "15:00"], pm: ["15:00", "18:30"], evening: ["18:30", "23:00"] };
+const parseTime = (s) => { const m = String(s).trim().match(/^(\d{1,2}):?(\d{2})$/); return m ? +m[1] * 3600 + +m[2] * 60 : null; };
+const player = AnimPlayer.create($("player"));
+let days = [];
+
+const readHash = () => Object.fromEntries(new URLSearchParams(location.hash.slice(1)));
+async function loadRoutes() {
+  const day = $("day").value, garage = $("garage").value;
+  const info = days.find((d) => d.day === day);
+  const keepG = garage;
+  $("garage").innerHTML = `<option value="All">All garages</option>` + (info?.garages ?? []).map((g) => `<option>${g}</option>`).join("");
+  $("garage").value = info?.garages.includes(keepG) ? keepG : "All";
+  const s = await (await fetch(`api/summary?day=${day}&garage=${encodeURIComponent($("garage").value)}`)).json();
+  const routes = Object.keys(s.statistics.inServiceTripsByRoute).sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
+  const keep = $("route").value || readHash().route || "147";
+  $("route").innerHTML = routes.map((r) => `<option>${r}</option>`).join("");
+  $("route").value = routes.includes(keep) ? keep : routes[0];
+}
+async function show() {
+  const from = parseTime($("from").value), to = parseTime($("to").value);
+  if (from === null || to === null || to <= from) { $("status").textContent = "From and To must be times like 15:00 and 18:30 (paddle time; 25:00 = 1 AM next day)."; return; }
+  history.replaceState(null, "", "#" + new URLSearchParams({ day: $("day").value, garage: $("garage").value, route: $("route").value, from: $("from").value, to: $("to").value }));
+  $("status").textContent = "Loading…";
+  try {
+    const d = await player.load({ day: $("day").value, garage: $("garage").value, route: $("route").value, from, to });
+    $("status").textContent = `${d.buses.length} bus${d.buses.length === 1 ? "" : "es"} on route ${d.route}, ${d.day}` +
+      (d.garages.length > 1 ? ` · ${d.garages.join(" and ")}` : "") + (d.missingPaths.length ? ` · ${d.missingPaths.length} moves without a path (skipped)` : "");
+  } catch (e) { $("status").textContent = `Couldn't load: ${e.message}`; }
+}
+$("preset").onchange = () => { const p = PRESETS[$("preset").value]; if (p) { $("from").value = p[0]; $("to").value = p[1]; } };
+for (const id of ["from", "to"]) $(id).oninput = () => { $("preset").value = "custom"; };
+$("day").onchange = loadRoutes;
+$("garage").onchange = loadRoutes;
+$("form").onsubmit = (e) => { e.preventDefault(); show(); };
+(async () => {
+  const h = readHash();
+  if (h.day) $("day").value = h.day;
+  if (h.from) $("from").value = h.from;
+  if (h.to) $("to").value = h.to;
+  const preset = Object.entries(PRESETS).find(([, [a, b]]) => a === $("from").value && b === $("to").value);
+  $("preset").value = preset ? preset[0] : "custom";
+  days = await (await fetch("api/days")).json();
+  if (h.garage) { $("garage").innerHTML = `<option>${h.garage}</option>`; $("garage").value = h.garage; }
+  await loadRoutes();
+  if (h.route) $("route").value = h.route;
+  show();
+})();
+</script>
+</body>
+</html>

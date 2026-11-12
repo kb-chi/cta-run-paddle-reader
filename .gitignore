@@ -1,0 +1,19 @@
+# installed with `npm install`
+node_modules/
+
+# raw downloads: rebuilt or re-downloaded when needed (the processed files next to them are kept)
+osm/raw/
+CTA GTFS/*.txt
+
+# one-off downloads, samples and generated output
+drive-download-*.zip
+sample-*.json
+exports/
+
+# local Claude Code settings
+.claude/
+
+# OS clutter
+Thumbs.db
+desktop.ini
+.DS_Store

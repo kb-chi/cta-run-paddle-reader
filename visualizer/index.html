@@ -1,0 +1,1323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run Paddle Visualizer</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --border: rgba(11, 11, 11, 0.10);
+    --wash: rgba(11, 11, 11, 0.04);
+    --track: #e1e0d9;
+    --band-night: rgba(11, 11, 11, 0.07);
+    --band-rush: rgba(11, 11, 11, 0.035);
+    --accent: #2a78d6;
+    /* one color per garage, fixed order (color follows the garage, never its rank) */
+    --g1: #2a78d6; --g2: #eb6834; --g3: #1baf7a; --g4: #eda100; --g5: #e87ba4; --g6: #008300; --g7: #6250d6;
+    --shadow: 0 4px 16px rgba(0, 0, 0, 0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #f0efec;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --border: rgba(255, 255, 255, 0.10);
+      --wash: rgba(255, 255, 255, 0.05);
+      --track: #383835;
+      --band-night: rgba(255, 255, 255, 0.07);
+      --band-rush: rgba(255, 255, 255, 0.035);
+      --accent: #3987e5;
+      --g1: #3987e5; --g2: #d95926; --g3: #199e70; --g4: #c98500; --g5: #d55181; --g6: #008300; --g7: #9085e9;
+      --shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #f0efec;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --wash: rgba(255, 255, 255, 0.05);
+    --track: #383835;
+    --band-night: rgba(255, 255, 255, 0.07);
+    --band-rush: rgba(255, 255, 255, 0.035);
+    --accent: #3987e5;
+    --g1: #3987e5; --g2: #d95926; --g3: #199e70; --g4: #c98500; --g5: #d55181; --g6: #008300; --g7: #9085e9;
+    --shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; margin-bottom: 16px; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0; }
+  .source { color: var(--ink-2); }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 16px; }
+  .controls label { color: var(--ink-2); display: inline-flex; align-items: center; gap: 6px; }
+  select, button {
+    font: inherit; color: var(--ink); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; cursor: pointer;
+  }
+  button:hover, select:hover { background: var(--wash); }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; padding: 5px 12px; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--wash); font-weight: 600; }
+  .seg.big button { padding: 7px 16px; font-size: 15px; }
+  .spacer { flex: 1; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+  .chart-card { padding: 16px 16px 12px; margin-bottom: 16px; }
+  .card h2 { font-size: 15px; font-weight: 600; margin: 0; }
+  .card h3 { font-size: 14px; font-weight: 600; margin: 0; }
+  .card .sub { color: var(--ink-2); margin: 2px 0 12px; }
+  .card-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 16px; }
+  .card-head > div:first-child { flex: 1; min-width: 200px; }
+
+  .goto { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 14px 16px; margin-bottom: 16px; }
+  .goto label { color: var(--ink-2); font-weight: 600; }
+  .goto select { font-size: 16px; padding: 9px 12px; min-width: 96px; }
+  .primary {
+    display: inline-block; font-size: 16px; font-weight: 600; padding: 10px 20px; border-radius: 8px;
+    background: var(--accent); border: 1px solid var(--accent); color: #fff; cursor: default; user-select: none;
+  }
+
+  .primary-btn { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; padding: 7px 16px; }
+  .primary-btn:hover { background: var(--accent); filter: brightness(1.08); }
+  #animStatus { margin: 4px 0 10px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .tile { padding: 12px 16px; }
+  .tile .label { color: var(--ink-2); }
+  .tile .value { font-size: 28px; font-weight: 600; margin: 2px 0; }
+  .tile .detail { color: var(--ink-2); }
+
+  svg text { fill: var(--ink-2); font-size: 12px; }
+  .viz svg { display: block; }
+  #chart svg { width: 100%; }
+  #chart .route { fill: var(--ink); font-weight: 600; font-size: 13px; }
+  .tick { fill: var(--muted) !important; font-size: 11px !important; font-variant-numeric: tabular-nums; }
+  #chart .time { fill: var(--ink-2); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .grid { stroke: var(--grid); stroke-width: 1; }
+  .midnight { stroke: var(--axis); stroke-width: 1; }
+  #chart .sep { stroke: var(--grid); stroke-width: 1; }
+  #chart .track { fill: var(--track); }
+  #chart .dot { stroke: var(--surface); stroke-width: 2; }
+  #chart .hit { fill: transparent; cursor: pointer; }
+  #chart .row.hover .hit { fill: var(--wash); }
+  .hint { color: var(--ink-2); font-size: 12px; }
+  .origin-dir { margin-bottom: 14px; }
+  .origin-row { display: grid; grid-template-columns: 110px 1fr 56px; gap: 8px; align-items: center; margin-bottom: 4px; }
+  .origin-row .segbar { margin: 0; height: 22px; }
+  .origin-row .lab, .origin-row .n { font-size: 12px; color: var(--ink-2); }
+  .origin-row .n { text-align: right; font-variant-numeric: tabular-nums; }
+  .origin-row.all .segbar { height: 28px; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--ink-2); font-size: 12px; align-items: center; }
+  .legend .key { display: inline-block; width: 18px; height: 0; border-top: 2px solid; margin-right: 6px; vertical-align: 3px; }
+  .legend .ring { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+
+  /* route view */
+  .route-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 16px; }
+  .pane-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 16px; }
+  .pane-head h2 { font-size: 20px; font-weight: 600; margin: 0 8px 0 4px; }
+  .route-kind { font-size: 13px; font-weight: 600; color: var(--ink-2); border: 1px solid var(--border); background: var(--wash); border-radius: 999px; padding: 3px 10px; }
+  .pane-pick { color: var(--ink-2); font-weight: 600; display: inline-flex; align-items: center; gap: 8px; }
+  .pane-pick select { font-size: 16px; padding: 7px 10px; min-width: 88px; font-weight: 600; }
+  /* comparing: two routes side by side, split by a line; stacked on narrow screens */
+  .panes.compare { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; }
+  .panes.compare .route-pane { min-width: 0; padding: 0 16px; }
+  .panes.compare .route-pane:first-child { padding-left: 0; border-right: 1px solid var(--axis); }
+  .panes.compare .route-pane:last-child { padding-right: 0; }
+  .panes.compare .pane-head { position: sticky; top: 0; z-index: 3; background: var(--page); padding: 8px 0; margin-bottom: 8px; }
+  body.comparing .wrap { max-width: 1840px; }
+  .panes.compare .dir-cards { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  @media (max-width: 820px) {
+    .panes.compare { grid-template-columns: minmax(0, 1fr); }
+    .panes.compare .route-pane { padding: 0; border-right: 0 !important; }
+    .panes.compare .route-pane + .route-pane { border-top: 2px solid var(--axis); padding-top: 16px; margin-top: 8px; }
+  }
+  .dir-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .dir-card { padding: 14px 16px; }
+  .dir-card .toward { color: var(--ink-2); margin: 2px 0 10px; }
+  .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; margin: 0; }
+  .facts dt { color: var(--ink-2); font-size: 12px; }
+  .facts dd { margin: 0; font-size: 20px; font-weight: 600; }
+  .facts dd .small { font-size: 12px; font-weight: 400; display: block; }
+  .by-garage { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink-2); }
+
+  .segbar { display: flex; gap: 2px; height: 28px; margin: 4px 0 12px; }
+  .segbar div { border-radius: 4px; display: flex; align-items: center; padding: 0 8px; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; min-width: 0; }
+
+  .graph { display: flex; }
+  .graph .labels { flex: none; }
+  .graph .plot { flex: 1; overflow-x: auto; overflow-y: hidden; }
+  .graph .stop { fill: var(--ink-2); }
+  .graph .stop.term { fill: var(--ink); font-weight: 600; }
+  .graph .stopline { stroke: var(--grid); stroke-width: 1; }
+  .graph .trip .line { fill: none; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+  .graph .trip .end { stroke: var(--surface); stroke-width: 2; }
+  .graph .trip .relief { fill: var(--surface); stroke-width: 1.5; }
+  .graph .trip .hitline { fill: none; stroke: transparent; stroke-width: 10; }
+  .graph svg.focus .trip { opacity: 0.18; }
+  .graph svg.focus .trip.hot { opacity: 1; }
+  .graph svg.focus .trip.hot .line { stroke-width: 3; }
+
+  .tip {
+    position: fixed; pointer-events: none; z-index: 10; max-width: 340px;
+    background: var(--surface); color: var(--ink); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; box-shadow: var(--shadow); font-size: 13px; display: none;
+  }
+  .tip .t { font-weight: 600; margin-bottom: 4px; }
+  .tip dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0; }
+  .tip dt { color: var(--ink-2); }
+  .tip dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .tip .note { color: var(--ink-2); font-size: 12px; }
+
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  th { color: var(--ink-2); font-weight: 600; background: var(--surface); }
+  td.num, th.num { text-align: right; }
+  .table-scroll { overflow-x: auto; }
+  table.hours th, table.hours td { text-align: center; padding: 6px 6px; white-space: nowrap; }
+  table.hours th:first-child, table.hours td:first-child { text-align: left; position: sticky; left: 0; background: var(--surface); }
+  table.hours td .small { display: block; }
+  .small { color: var(--ink-2); font-size: 12px; }
+  a { color: inherit; }
+  td a { font-weight: 600; }
+
+  .empty { padding: 48px 16px; text-align: center; color: var(--ink-2); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Run Paddle Visualizer</h1>
+    <span class="source" id="source"></span>
+    <a class="source" href="animate.html">Route animation →</a>
+  </header>
+
+  <div class="controls">
+    <div class="seg big" role="group" aria-label="Day type">
+      <button type="button" data-day="Weekday" aria-pressed="true">Weekday</button>
+      <button type="button" data-day="Saturday" aria-pressed="false">Saturday</button>
+      <button type="button" data-day="Sunday" aria-pressed="false">Sunday</button>
+    </div>
+    <label>Garage <select id="garageSelect"><option value="All">All garages</option></select></label>
+    <span class="spacer"></span>
+    <label class="overview-only">Sort
+      <select id="sortSelect">
+        <option value="route">Route number</option>
+        <option value="first" data-ends>Earliest first trip</option>
+        <option value="last" data-ends>Latest last trip</option>
+        <option value="span" data-ends>Longest span</option>
+      </select>
+    </label>
+    <div class="seg" role="group" aria-label="Clock">
+      <button type="button" data-clock="24" aria-pressed="true">24-hour</button>
+      <button type="button" data-clock="12" aria-pressed="false">12-hour</button>
+    </div>
+    <label>Time period
+      <select id="periodSelect">
+        <option value="all">All day</option>
+        <option value="overnight">Overnight (11 PM–6 AM)</option>
+        <option value="am">AM rush (6–9 AM)</option>
+        <option value="midday">Midday (9 AM–3 PM)</option>
+        <option value="pm">PM rush (3–6:30 PM)</option>
+        <option value="evening">Evening (6:30–11 PM)</option>
+      </select>
+    </label>
+    <div class="seg overview-only" role="group" aria-label="View">
+      <button type="button" data-view="chart" aria-pressed="true">Chart</button>
+      <button type="button" data-view="table" aria-pressed="false">Table</button>
+    </div>
+  </div>
+
+  <form class="card goto" id="gotoForm">
+    <label for="gotoSelect">Route</label>
+    <select id="gotoSelect"></select>
+    <span class="primary" aria-hidden="true">View Detailed Statistics by Route</span>
+  </form>
+
+  <div id="empty" class="card empty">
+    <div id="emptyMsg">Loading…</div>
+  </div>
+
+  <!-- all routes -->
+  <div id="content" class="hidden">
+    <div class="tiles" id="tiles"></div>
+
+    <!-- shown when one garage is picked -->
+    <section class="card chart-card hidden" id="garageAnimCard">
+      <div class="card-head">
+        <div>
+          <h2 id="garageAnimTitle">Garage animation</h2>
+          <div class="sub">Every bus from this garage on every route, moving on a map, for the day and time period picked at the top. Buses are labelled with the last 3 characters of their run number (G when pulling out or in); hover one for its route. You can save it as a GIF.</div>
+        </div>
+        <button type="button" class="primary-btn" id="garageAnimGo">Generate animation</button>
+      </div>
+      <div id="garageAnimStatus" class="sub"></div>
+      <div id="garageAnimPlayer"></div>
+    </section>
+
+    <section class="card chart-card" id="chartCard">
+      <div class="card-head">
+        <div>
+          <h2 id="chartTitle">First and last trips by route</h2>
+          <div class="sub" id="chartSub">Each bar runs from a terminal's first departure to its last; dots are the departures, colored by garage. One row per direction.</div>
+        </div>
+        <div class="hint">Click a route for a closer look</div>
+      </div>
+      <div class="legend garage-legend" style="margin-bottom:10px"></div>
+      <div id="chart" class="viz"></div>
+    </section>
+
+    <section class="card chart-card hidden" id="tableCard">
+      <h2 id="tableTitle">First and last trips by route</h2>
+      <div class="sub" id="tableSub">Departure times of the first and last trip from each terminal. Click a route for a closer look.</div>
+      <div class="table-scroll"><table id="table"></table></div>
+    </section>
+  </div>
+
+  <!-- one route -->
+  <div id="routeView" class="hidden">
+    <div class="route-bar">
+      <button type="button" id="backBtn">← All routes</button>
+      <button type="button" id="compareBtn">Compare with another route</button>
+      <button type="button" id="singleBtn" class="hidden">← Single route view</button>
+    </div>
+
+    <!-- one pane per route: one in single view, two side by side when comparing (built from paneTemplate) -->
+    <div class="panes" id="panes"></div>
+
+    <section class="card chart-card" id="animCard">
+      <div class="card-head">
+        <div>
+          <h2>Animation</h2>
+          <div class="sub" id="animSub">Every bus on this route moving on a map, for the day, garage and time period picked at the top. You can save it as a GIF.</div>
+        </div>
+        <button type="button" class="primary-btn" id="animGo">Generate animation</button>
+      </div>
+      <div id="animStatus" class="sub"></div>
+      <div id="animPlayer"></div>
+    </section>
+  </div>
+</div>
+<div class="tip" id="tip" role="tooltip"></div>
+
+<script src="anim-player.js"></script>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const DAYS = ["Weekday", "Saturday", "Sunday"];
+const GARAGE_ORDER = ["North Park", "Kedzie", "Forest Glen", "Chicago", "74th", "77th", "103rd"];
+const garageColor = (g) => { const i = GARAGE_ORDER.indexOf(g); return i === -1 ? "var(--muted)" : `var(--g${i + 1})`; };
+const state = {
+  day: "Weekday", garage: "All", route: null, compare: null, // compare = the second route when comparing
+  sort: "route", clock: "24", view: "chart", zoom: 1, period: "all",
+  days: [], summary: null, rows: [], routeData: null, model: null,
+};
+const cache = new Map();
+async function getJSON(url) {
+  if (cache.has(url)) return cache.get(url);
+  const p = fetch(url).then(async (r) => { const b = await r.json(); if (!r.ok) throw new Error(b.error || r.statusText); return b; });
+  cache.set(url, p);
+  p.catch(() => cache.delete(url));
+  return p;
+}
+
+// ---------- time ----------
+const secs = (t) => { const [h, m, s] = t.split(":").map(Number); return h * 3600 + m * 60 + (s || 0); };
+// Paddle style: 24-hour, counting past 24:00 after midnight; a half minute shows as "+".
+function fmt(sec, { clock = state.clock, short = false } = {}) {
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), plus = sec % 60 >= 30 ? "+" : "";
+  if (clock === "24") return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}${plus}`;
+  const h24 = h % 24, ampm = h24 < 12 ? (short ? "a" : " AM") : (short ? "p" : " PM");
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${h12}:${String(m).padStart(2, "0")}${plus}${ampm}`;
+}
+const nextDay = (sec) => sec >= 24 * 3600;
+const fmtLong = (sec) => fmt(sec) + (state.clock === "12" && nextDay(sec) ? " (next day)" : "");
+function fmtSpan(sec) { const h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60); return `${h}h ${String(m).padStart(2, "0")}m`; }
+function tickLabel(hr) {
+  // the overnight view runs 23:00 → 06:00 on one axis, so its hours wrap at midnight
+  if (state.clock === "24") return `${String(state.period === "overnight" ? hr % 24 : hr).padStart(2, "0")}:00`;
+  const h24 = hr % 24; return `${h24 % 12 === 0 ? 12 : h24 % 12} ${h24 < 12 ? "AM" : "PM"}`;
+}
+// ---------- time periods (by departure time) ----------
+const PERIODS = [
+  { key: "overnight", name: "Overnight", short: "Overnight", tiny: "Night", span: "11 PM–6 AM" },
+  { key: "am", name: "Morning rush", short: "AM rush", tiny: "AM", span: "6–9 AM" },
+  { key: "midday", name: "Midday", short: "Midday", tiny: "Mid", span: "9 AM–3 PM" },
+  { key: "pm", name: "Evening rush", short: "PM rush", tiny: "PM", span: "3–6:30 PM" },
+  { key: "evening", name: "Evening", short: "Evening", tiny: "Eve", span: "6:30–11 PM" },
+];
+function periodOf(sec) {
+  const h = (sec / 3600) % 24;
+  if (h >= 23 || h < 6) return "overnight";
+  if (h < 9) return "am";
+  if (h < 15) return "midday";
+  if (h < 18.5) return "pm";
+  return "evening";
+}
+// ---------- the time-period filter ----------
+// hours each period covers on the chart; overnight runs 23:00 → 30:00 (6 AM), with early-morning
+// trips (before 6 AM) drawn after midnight so the night is one stretch
+const WINDOW = { overnight: [23, 30], am: [6, 9], midday: [9, 15], pm: [15, 18.5], evening: [18.5, 23] };
+const inPeriod = (sec) => state.period === "all" || periodOf(sec) === state.period;
+const shiftOf = (sec) => (state.period === "overnight" && sec < 6 * 3600 ? 24 * 3600 : 0);
+const pos = (sec) => sec + shiftOf(sec); // where a time goes on the chart (labels keep the paddle time)
+const periodLabel = () => (state.period === "all" ? "all day" : (() => { const p = PERIODS.find((q) => q.key === state.period); return `${p.short} (${p.span})`; })());
+
+// the summary rows, cut down to the departures in the chosen period (rows with none are left out)
+let viewCache = { rows: null, period: null, out: null };
+function viewRows() {
+  if (state.period === "all") return state.rows;
+  if (viewCache.rows === state.rows && viewCache.period === state.period) return viewCache.out;
+  const out = [];
+  for (const r of state.rows) {
+    const deps = r.departures.filter((d) => inPeriod(d.sec)).sort((a, b) => pos(a.sec) - pos(b.sec));
+    if (!deps.length) continue;
+    const f = deps[0], l = deps[deps.length - 1];
+    out.push({
+      ...r, departures: deps, trips: deps.length,
+      freq: periodStats(r.departures)[state.period].every, // gap from each departure in the period to the next
+      first: f.sec, last: l.sec,
+      firstTrip: { run: f.run, garage: f.garage, from: r.from },
+      lastTrip: { run: l.run, garage: l.garage, from: r.from },
+      garages: [...new Set(deps.map((d) => d.garage))].sort(garageSort),
+    });
+  }
+  viewCache = { rows: state.rows, period: state.period, out };
+  return out;
+}
+// chart time range: the period's hours, or the data's first to last departure
+function timeRange(rows) {
+  if (state.period !== "all") return WINDOW[state.period].map((h, i) => (i ? Math.ceil(h) : Math.floor(h)));
+  return [Math.floor(Math.min(...rows.map((r) => r.first)) / 3600), Math.ceil(Math.max(...rows.map((r) => r.last)) / 3600)];
+}
+// per period: trips leaving then, first and last, and the average gap from each to the next departure
+function periodStats(departures) {
+  const deps = [...departures].sort((a, b) => a.sec - b.sec);
+  const out = Object.fromEntries(PERIODS.map((p) => [p.key, { trips: 0, gaps: [], first: null, last: null }]));
+  deps.forEach((d, i) => {
+    const o = out[periodOf(d.sec)];
+    o.trips++;
+    if (o.first === null) o.first = d.sec;
+    o.last = d.sec;
+    if (i + 1 < deps.length) o.gaps.push(deps[i + 1].sec - d.sec);
+  });
+  for (const o of Object.values(out)) o.every = o.gaps.length ? Math.round((10 * o.gaps.reduce((a, b) => a + b, 0)) / o.gaps.length / 60) / 10 : null;
+  return out;
+}
+function tickEvery(perHour) {
+  const room = state.clock === "12" ? 50 : 44;
+  return [1, 2, 3, 4, 6, 12].find((n) => n * perHour >= room) ?? 12;
+}
+
+// ---------- data ----------
+const routeOrder = (a, b) => (parseInt(a.replace(/\D/g, "")) || 0) - (parseInt(b.replace(/\D/g, "")) || 0) || a.localeCompare(b);
+function esc(s) { return String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+const garageSort = (a, b) => GARAGE_ORDER.indexOf(a) - GARAGE_ORDER.indexOf(b);
+
+let coords = new Map();
+function compass(from, to) {
+  const a = coords.get(from), b = coords.get(to);
+  if (!a || !b) return null;
+  const dLat = b.lat - a.lat, dLon = (b.lon - a.lon) * Math.cos((a.lat * Math.PI) / 180);
+  if (Math.abs(dLat) >= Math.abs(dLon)) return dLat > 0 ? "Northbound" : "Southbound";
+  return dLon > 0 ? "Eastbound" : "Westbound";
+}
+const DIR_ORDER = { Northbound: 0, Eastbound: 1, Southbound: 2, Westbound: 3 };
+const ABBR = { Northbound: "NB", Southbound: "SB", Eastbound: "EB", Westbound: "WB" };
+// distance in km between two named places (flat-earth is plenty at city scale)
+function km(a, b) {
+  const p = coords.get(a), q = coords.get(b);
+  if (!p || !q) return 0;
+  const dLat = (q.lat - p.lat) * 111.32, dLon = (q.lon - p.lon) * 111.32 * Math.cos((p.lat * Math.PI) / 180);
+  return Math.hypot(dLat, dLon);
+}
+
+function buildRows(summary) {
+  coords = new Map(Object.entries(summary.places ?? {}));
+  const rows = [];
+  for (const [route, byFrom] of Object.entries(summary.statistics.directionsByRoute)) {
+    for (const [from, d] of Object.entries(byFrom)) {
+      const departures = d.departures.map((x) => ({ sec: secs(x.time), run: x.run, garage: x.garage, start: x.start }));
+      rows.push({
+        route, from, toward: d.toward, trips: d.trips, freq: d.averageFrequency,
+        direction: compass(from, d.toward),
+        first: secs(d.firstTrip.time), last: secs(d.lastTrip.time),
+        firstTrip: d.firstTrip, lastTrip: d.lastTrip, departures,
+        garages: [...new Set(departures.map((x) => x.garage))].sort(garageSort),
+      });
+    }
+  }
+  return rows;
+}
+const sortDirs = (list) => list.sort((a, b) => (DIR_ORDER[a.direction] ?? 9) - (DIR_ORDER[b.direction] ?? 9) || a.from.localeCompare(b.from));
+
+// group rows by route, order routes by the chosen sort, directions NB/EB before SB/WB
+function grouped() {
+  const groups = new Map();
+  for (const r of viewRows()) { if (!groups.has(r.route)) groups.set(r.route, []); groups.get(r.route).push(r); }
+  for (const g of groups.values()) sortDirs(g);
+  const key = {
+    route: null,
+    first: (g) => Math.min(...g.map((r) => pos(r.first))),
+    last: (g) => -Math.max(...g.map((r) => pos(r.last))),
+    span: (g) => -(Math.max(...g.map((r) => pos(r.last))) - Math.min(...g.map((r) => pos(r.first)))),
+  }[showEnds() ? state.sort : "route"];
+  const routes = [...groups.keys()].sort((a, b) => (key ? key(groups.get(a)) - key(groups.get(b)) : 0) || routeOrder(a, b));
+  return routes.map((route) => ({ route, rows: groups.get(route) }));
+}
+
+function garageLegend(garages) {
+  return garages.map((g) => `<span><span class="swatch" style="background:${garageColor(g)}"></span>${esc(g)}</span>`).join("");
+}
+
+// ---------- svg helpers ----------
+const NS = "http://www.w3.org/2000/svg";
+function el(name, attrs = {}, parent) {
+  const e = document.createElementNS(NS, name);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function fitText(t, maxW) {
+  const full = t.textContent;
+  if (t.getComputedTextLength() <= maxW) return;
+  let s = full;
+  while (s.length > 4 && t.getComputedTextLength() > maxW) { s = s.slice(0, -1); t.textContent = s.trimEnd() + "…"; }
+  el("title", {}, t).textContent = full;
+}
+
+// First / last trip figures only make sense for the whole day; with a time period picked they're left
+// out and only the departures (timelines, dots, counts, frequency) are shown.
+const showEnds = () => state.period === "all";
+// A route running round the clock: its last trip of the day leaves after 2 AM (26:00) and its first before
+// 4 AM. Its route page says "24/7 route" instead of first / last trip times.
+// Overnight circulators: night-only routes that start and end around the service day's change at
+// ~3 AM, so they'd look 24/7 by the times alone. Their pages say "Overnight circulator" and keep their
+// first and last trips.
+const OVERNIGHT_CIRCULATORS = new Set(["N5"]);
+const is247 = (route) => {
+  if (OVERNIGHT_CIRCULATORS.has(route)) return false;
+  const rows = state.rows.filter((r) => r.route === route);
+  return rows.length > 0 && Math.min(...rows.map((r) => r.first)) < 4 * 3600 && Math.max(...rows.map((r) => r.last)) > 26 * 3600;
+};
+
+// ---------- overview: tiles ----------
+function renderTiles() {
+  const rows = viewRows();
+  if (!rows.length) { $("tiles").innerHTML = `<div class="card tile"><div class="label">No trips</div><div class="detail">No trips leave in this period.</div></div>`; return; }
+  if (!showEnds()) { // a time period: no first / last trip figures
+    const trips = rows.reduce((a, r) => a + r.trips, 0), routes = new Set(rows.map((r) => r.route)).size;
+    const runs = new Set(rows.flatMap((r) => r.departures.map((d) => d.run))).size;
+    const tile = (label, value, detail) => `<div class="card tile"><div class="label">${label}</div><div class="value">${value}</div><div class="detail">${detail}</div></div>`;
+    const withFreq = rows.filter((r) => r.freq != null && r.trips >= 2);
+    const best = withFreq.length ? withFreq.reduce((a, b) => (b.freq < a.freq ? b : a)) : null;
+    $("tiles").innerHTML = tile("Runs with a trip then", runs.toLocaleString(), `${trips.toLocaleString()} in-service trips on ${routes} routes`) +
+      (best ? tile("Most frequent", `every ${best.freq} min`, `Route ${esc(best.route)} from ${esc(best.from)}, ${best.trips} trips`) : "");
+    return;
+  }
+  const earliest = rows.reduce((a, b) => (pos(b.first) < pos(a.first) ? b : a));
+  const latest = rows.reduce((a, b) => (pos(b.last) > pos(a.last) ? b : a));
+  const span = (r) => pos(r.last) - pos(r.first);
+  const shortest = rows.reduce((a, b) => (span(b) < span(a) ? b : a));
+  const routes = new Set(rows.map((r) => r.route)).size;
+  const tile = (label, value, detail) => `<div class="card tile"><div class="label">${label}</div><div class="value">${value}</div><div class="detail">${detail}</div></div>`;
+  const where = (r, t) => `Route ${esc(r.route)} from ${esc(r.from)} · run ${esc(t.run)}${state.garage === "All" && t.garage ? " (" + esc(t.garage) + ")" : ""}`;
+  const trips = rows.reduce((a, r) => a + r.trips, 0);
+  const runs = state.period === "all" ? state.summary.runCount : new Set(rows.flatMap((r) => r.departures.map((d) => d.run))).size;
+  $("tiles").innerHTML =
+    tile(state.period === "all" ? "Runs · trips" : "Runs with a trip then", `${runs.toLocaleString()}`, `${trips.toLocaleString()} in-service trips on ${routes} routes`) +
+    tile("Earliest first trip", fmt(earliest.first), where(earliest, earliest.firstTrip)) +
+    tile("Latest last trip", fmt(latest.last) + (state.clock === "12" && nextDay(latest.last) ? ' <span class="small">next day</span>' : ""), where(latest, latest.lastTrip)) +
+    (state.period === "all"
+      ? tile("Shortest service day", fmtSpan(span(shortest)), `Route ${esc(shortest.route)} from ${esc(shortest.from)}, ${fmt(shortest.first)}–${fmt(shortest.last)}`)
+      : (() => {
+        const withFreq = rows.filter((r) => r.freq != null && r.trips >= 2);
+        if (!withFreq.length) return "";
+        const best = withFreq.reduce((a, b) => (b.freq < a.freq ? b : a));
+        return tile("Most frequent", `every ${best.freq} min`, `Route ${esc(best.route)} from ${esc(best.from)}, ${best.trips} trips`);
+      })());
+}
+
+// ---------- overview: chart ----------
+function renderChart() {
+  const host = $("chart");
+  host.innerHTML = "";
+  const groups = grouped();
+  if (!groups.length) return;
+  const width = host.clientWidth || 900;
+  const narrow = width < 640;
+  const labelW = narrow ? 64 : 250, rightPad = narrow ? 44 : 56, leftPad = narrow ? 40 : 48;
+  const rowH = 24, groupGap = 10, bar = 8, top = 26, tickY = 14;
+  const height = top + groups.reduce((s, g) => s + g.rows.length * rowH + groupGap, 0) + 4;
+
+  const [h0, h1] = timeRange(groups.flatMap((g) => g.rows));
+  const x0 = labelW + leftPad, x1 = width - rightPad;
+  const x = (s) => x0 + ((pos(s) - h0 * 3600) / ((h1 - h0) * 3600)) * (x1 - x0);
+
+  const svg = el("svg", { viewBox: `0 0 ${width} ${height}`, height, role: "img",
+    "aria-label": showEnds() ? `First and last trip times for each route and direction, ${periodLabel()}` : `Departures for each route and direction, ${periodLabel()}` }, host);
+
+  const every = tickEvery((x1 - x0) / (h1 - h0));
+  for (let hr = h0; hr <= h1; hr++) {
+    const gx = x(hr * 3600);
+    el("line", { x1: gx, x2: gx, y1: top - 6, y2: height - 4, class: hr % 24 === 0 ? "midnight" : "grid" }, svg);
+    if (hr % every === 0) el("text", { x: gx, y: tickY, "text-anchor": "middle", class: "tick" }, svg).textContent = tickLabel(hr);
+  }
+
+  let y = top;
+  groups.forEach((g, gi) => {
+    if (gi > 0) el("line", { x1: 0, x2: width, y1: y - groupGap / 2, y2: y - groupGap / 2, class: "sep" }, svg);
+    g.rows.forEach((r, ri) => {
+      const cy = y + rowH / 2;
+      const row = el("g", { class: "row" }, svg);
+      el("rect", { x: 0, y, width, height: rowH, class: "hit", rx: 4 }, row);
+      if (ri === 0) el("text", { x: 0, y: cy + 4, class: "route" }, row).textContent = g.route;
+      const dirText = el("text", { x: narrow ? 34 : 44, y: cy + 4 }, row);
+      if (narrow) dirText.textContent = ABBR[r.direction] ?? "";
+      else {
+        dirText.textContent = `${ABBR[r.direction] ? ABBR[r.direction] + " · " : ""}from ${r.from}`;
+        fitText(dirText, labelW - 44 - 8);
+      }
+      const xa = x(r.first), xb = Math.max(x(r.last), xa + bar);
+      el("rect", { x: xa, y: cy - bar / 2, width: xb - xa, height: bar, rx: bar / 2, class: "track" }, row);
+      for (const dep of r.departures) el("circle", { cx: x(dep.sec), cy, r: 2, fill: garageColor(dep.garage) }, row);
+      if (showEnds()) { // first / last trip: bigger dots and their times
+        el("circle", { cx: xa, cy, r: 4, class: "dot", fill: garageColor(r.firstTrip.garage) }, row);
+        el("circle", { cx: xb, cy, r: 4, class: "dot", fill: garageColor(r.lastTrip.garage) }, row);
+        el("text", { x: xa - 8, y: cy + 4, "text-anchor": "end", class: "time" }, row).textContent = fmt(r.first, { short: true });
+        el("text", { x: xb + 8, y: cy + 4, class: "time" }, row).textContent = fmt(r.last, { short: true });
+      }
+
+      row.addEventListener("mouseenter", () => row.classList.add("hover"));
+      row.addEventListener("mouseleave", () => { row.classList.remove("hover"); hideTip(); });
+      row.addEventListener("click", () => openRoute(r.route));
+      row.addEventListener("mousemove", (ev) => {
+        const box = svg.getBoundingClientRect();
+        const px = ((ev.clientX - box.left) / box.width) * width;
+        const at = h0 * 3600 + ((px - x0) / (x1 - x0)) * (h1 - h0) * 3600;
+        let near = null;
+        for (const dep of r.departures) if (!near || Math.abs(pos(dep.sec) - at) < Math.abs(pos(near.sec) - at)) near = dep;
+        showTip(ev, rowTip(r, px >= xa - 12 && px <= xb + 12 ? near : null));
+      });
+      y += rowH;
+    });
+    y += groupGap;
+  });
+}
+
+const runLabel = (run, garage) => `run ${esc(run)}${garage && state.garage === "All" ? ` <span class="swatch" style="background:${garageColor(garage)};margin:0 2px 0 6px"></span>${esc(garage)}` : ""}`;
+function byGarageText(deps) {
+  const c = {};
+  for (const d of deps) c[d.garage] = (c[d.garage] ?? 0) + 1;
+  return Object.entries(c).sort((a, b) => garageSort(a[0], b[0]));
+}
+function rowTip(r, near) {
+  const startNote = (t) => (t.from !== r.from ? `<div class="note">starts at ${esc(t.from)}</div>` : "");
+  const split = r.garages.length > 1 ? `<dt>Garages</dt><dd>${byGarageText(r.departures).map(([g, n]) => `<span class="swatch" style="background:${garageColor(g)}"></span>${esc(g)} ${n}`).join(" &nbsp;")}</dd>` : "";
+  return `
+    <div class="t">Route ${esc(r.route)}${r.direction ? " · " + r.direction : ""}</div>
+    <div class="note" style="margin-bottom:6px">${esc(r.from)} → ${esc(r.toward)}</div>
+    <dl>
+      ${showEnds() ? `<dt>First trip</dt><dd>${fmtLong(r.first)} · ${runLabel(r.firstTrip.run, r.firstTrip.garage)}${startNote(r.firstTrip)}</dd>
+      <dt>Last trip</dt><dd>${fmtLong(r.last)} · ${runLabel(r.lastTrip.run, r.lastTrip.garage)}${startNote(r.lastTrip)}</dd>
+      <dt>Span</dt><dd>${fmtSpan(pos(r.last) - pos(r.first))}</dd>` : ""}
+      <dt>Trips</dt><dd>${r.trips}${state.period === "all" ? "" : ` <span class="small">${esc(periodLabel())}</span>`}</dd>
+      ${split}
+      <dt>Every</dt><dd>${r.freq == null ? "—" : r.freq + " min on average"}</dd>
+      ${near ? `<dt>Nearest</dt><dd>${fmtLong(near.sec)} · ${runLabel(near.run, near.garage)}</dd>` : ""}
+    </dl>
+    <div class="note" style="margin-top:6px">Click for a closer look</div>`;
+}
+
+// ---------- tooltip ----------
+function showTip(ev, html) {
+  const tip = $("tip");
+  tip.innerHTML = html;
+  tip.style.display = "block";
+  const pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
+  let left = ev.clientX + pad, topY = ev.clientY + pad;
+  if (left + w > window.innerWidth - 8) left = ev.clientX - w - pad;
+  if (topY + h > window.innerHeight - 8) topY = ev.clientY - h - pad;
+  tip.style.left = Math.max(8, left) + "px";
+  tip.style.top = Math.max(8, topY) + "px";
+}
+function hideTip() { $("tip").style.display = "none"; }
+
+// ---------- overview: table ----------
+function renderTable() {
+  const rows = grouped().flatMap((g) => g.rows);
+  const startCell = (sec, t, r) => `${fmtLong(sec)}<div class="small">run ${esc(t.run)}${state.garage === "All" && t.garage ? " · " + esc(t.garage) : ""}${t.from !== r.from ? " · starts at " + esc(t.from) : ""}</div>`;
+  const ends = showEnds();
+  $("table").innerHTML = `
+    <thead><tr><th>Route</th><th>Direction</th><th>From</th><th>Toward</th><th>Garage</th>${ends ? `<th>First trip</th><th>Last trip</th>
+      <th class="num">Span</th>` : ""}<th class="num">Trips</th><th class="num">Avg. every</th></tr></thead>
+    <tbody>${rows.map((r) => `<tr>
+      <td><a href="#" data-route="${esc(r.route)}">${esc(r.route)}</a></td><td>${r.direction ?? "—"}</td><td>${esc(r.from)}</td><td>${esc(r.toward)}</td>
+      <td>${byGarageText(r.departures).map(([g, n]) => `<div><span class="swatch" style="background:${garageColor(g)}"></span>${esc(g)}${r.garages.length > 1 ? ` <span class="small">${n}</span>` : ""}</div>`).join("")}</td>
+      ${ends ? `<td>${startCell(r.first, r.firstTrip, r)}</td><td>${startCell(r.last, r.lastTrip, r)}</td>
+      <td class="num">${fmtSpan(pos(r.last) - pos(r.first))}</td>` : ""}<td class="num">${r.trips}</td>
+      <td class="num">${r.freq == null ? "—" : r.freq + " min"}</td></tr>`).join("")}</tbody>`;
+  for (const a of $("table").querySelectorAll("a[data-route]")) a.addEventListener("click", (e) => { e.preventDefault(); openRoute(a.dataset.route); });
+}
+
+// =====================================================================
+// Route view
+// =====================================================================
+
+/**
+ * Every in-service trip on one route, sorted into the two directions of directionsByRoute.
+ * A trip split by a mid-route relief (RN / RS / RE / RW) is printed as two pieces on two
+ * paddles; they're joined back into one trip here (with the relief point remembered), so only
+ * trips that really start or end short of a terminal show as short trips.
+ */
+function routeModel(route, data) {
+  const dirs = data.statistics.directionsByRoute[route] ?? {};
+  const terminals = Object.keys(dirs);
+  const [A, B] = terminals;
+  const garageOfRun = new Map(data.runs.map((r) => [r.number, r.garage]));
+
+  const pieces = [];
+  for (const r of data.runs) for (const h of r.halves) {
+    const inService = h.trips.filter((t) => t.inService);
+    inService.forEach((t, i) => {
+      if (t.route !== route) return;
+      pieces.push({ run: r.number, half: h, trip: t, first: i === 0, last: i === inService.length - 1 });
+    });
+  }
+  const next = new Map(), hasPrev = new Set();
+  for (const p of pieces) {
+    const rel = p.half.startRelief;
+    if (!p.first || p.half.startType !== "relief" || !rel || rel.direction === "Terminal") continue;
+    const at = secs(p.trip.begin.time);
+    const prev = pieces.find((q) => q.run === rel.otherRun && q.last && !next.has(q)
+      && q.trip.end.location === p.trip.begin.location && Math.abs(secs(q.trip.end.time) - at) <= 120);
+    if (prev) { next.set(prev, p); hasPrev.add(p); }
+  }
+  const trips = [];
+  for (const p of pieces) {
+    if (hasPrev.has(p)) continue;
+    const chain = [p];
+    while (next.has(chain[chain.length - 1])) chain.push(next.get(chain[chain.length - 1]));
+    const points = [], reliefs = [];
+    chain.forEach((c, i) => {
+      const pts = [c.trip.begin, ...(c.trip.stops ?? []), c.trip.end].map((q) => ({ location: q.location, sec: secs(q.time) }));
+      if (i > 0) { reliefs.push({ ...pts[0], from: chain[i - 1].run, to: c.run }); pts.shift(); }
+      points.push(...pts);
+    });
+    trips.push({ runs: chain.map((c) => c.run), garage: garageOfRun.get(chain[0].run) ?? "", points, reliefs, begin: points[0], end: points[points.length - 1] });
+  }
+
+  const fromOf = (t) => {
+    if (B === undefined) return A;
+    if (t.begin.location === A) return A;
+    if (t.begin.location === B) return B;
+    if (t.end.location === B) return A;
+    if (t.end.location === A) return B;
+    const b0 = km(t.begin.location, B), b1 = km(t.end.location, B);
+    return b1 < b0 ? A : B;
+  };
+  for (const t of trips) {
+    t.from = fromOf(t);
+    t.toward = t.from === A ? B : A;
+    t.startsShort = t.begin.location !== t.from;
+    t.endsShort = t.toward !== undefined && t.end.location !== t.toward;
+    t.short = t.startsShort || t.endsShort;
+  }
+  trips.sort((a, b) => a.begin.sec - b.begin.sec);
+  const garages = [...new Set(trips.map((t) => t.garage))].sort(garageSort);
+  return { route, terminals, dirs, trips, garages, order: stopOrder(trips, A, B), stats: data.statistics };
+}
+
+/**
+ * The stops from terminal A (top) to terminal B (bottom). Starts from the fullest A→B trip, then
+ * fits in every other stop where the trips put it: between the known stops a trip passes just
+ * before and just after it (so a stop beyond a terminal, like Solo Cup past Ford City, goes past
+ * the end), choosing among those slots by the least added distance.
+ */
+function stopOrder(trips, A, B) {
+  const seqs = trips.map((t) => {
+    const s = t.points.map((p) => p.location).filter((loc, i, arr) => loc !== arr[i - 1]);
+    return t.from === A ? s : s.reverse();
+  });
+  const full = seqs.filter((s) => s[0] === A && s[s.length - 1] === B);
+  const ref = (full.length ? full : seqs).reduce((a, b) => (b.length > a.length ? b : a), []);
+  const order = [...new Set(ref)];
+  const slotCost = (loc, i) => {
+    const prev = order[i - 1], nxt = order[i];
+    return prev === undefined ? km(loc, nxt) : nxt === undefined ? km(prev, loc) : km(prev, loc) + km(loc, nxt) - km(prev, nxt);
+  };
+  const bestSlot = (loc, lo, hi) => {
+    let best = lo, bestCost = Infinity;
+    for (let i = lo; i <= hi; i++) { const c = slotCost(loc, i); if (c < bestCost) { bestCost = c; best = i; } }
+    return best;
+  };
+  // longer trips first, so their stops are placed before the short ones that lean on them
+  for (const s of [...seqs].sort((a, b) => b.length - a.length)) {
+    for (let i = 0; i < s.length; i++) {
+      const loc = s[i];
+      if (order.includes(loc)) continue;
+      let p = -1, n = -1;
+      for (let j = i - 1; j >= 0; j--) if (order.includes(s[j])) { p = order.indexOf(s[j]); break; }
+      for (let k = i + 1; k < s.length; k++) if (order.includes(s[k])) { n = order.indexOf(s[k]); break; }
+      let at;
+      if (p !== -1 && (n === -1 || n > p)) at = bestSlot(loc, p + 1, n === -1 ? order.length : n);
+      else if (n !== -1 && p === -1) at = bestSlot(loc, 0, n);
+      else at = bestSlot(loc, 0, order.length); // the trip runs against the order here: go by distance
+      order.splice(at, 0, loc);
+    }
+  }
+  return order;
+}
+
+// ---------- panes ----------
+// The route view is drawn into a "pane": one in single view, two side by side when comparing.
+// Each pane has its own parts (found by data-part) and its own route; day, garage and period are shared.
+const PANE_HTML = `
+  <div class="pane-head">
+    <label class="pane-pick hidden">Route <select data-part="pick" aria-label="Route for this side"></select></label>
+    <h2 data-part="title"></h2>
+    <span class="route-kind hidden" data-part="kind">Overnight circulator</span>
+    <div class="legend" data-part="garages"></div>
+  </div>
+  <div class="dir-cards" data-part="dirCards"></div>
+  <section class="card chart-card">
+    <h2>Where trips start from</h2>
+    <div class="sub">How each in-service trip on this route begins, by direction.</div>
+    <div class="legend" data-part="originLegend" style="margin-bottom:10px"></div>
+    <div data-part="originBars"></div>
+    <div class="table-scroll"><table data-part="originTable"></table></div>
+  </section>
+  <section class="card chart-card">
+    <h2>Average Headway by hour</h2>
+    <div class="sub">Average minutes from each departure in that hour to the next one from the same terminal, with the number of departures below. The day's last departure has no next one, so an hour with only that shows "—".</div>
+    <div class="table-scroll"><table class="hours" data-part="hoursTable"></table></div>
+  </section>
+  <section class="card chart-card">
+    <div class="card-head">
+      <div>
+        <h2>All trips</h2>
+        <div class="sub">One line per trip: time runs left to right, stops top to bottom, spaced by distance. Lines are colored by garage. Hover a line for its run and times.</div>
+      </div>
+      <div class="seg" role="group" aria-label="Zoom">
+        <button type="button" data-zoom="1">1×</button><button type="button" data-zoom="2">2×</button><button type="button" data-zoom="4">4×</button><button type="button" data-zoom="8">8×</button>
+      </div>
+    </div>
+    <div class="legend" style="margin-bottom:12px" data-part="graphLegend"></div>
+    <div data-part="graphs"></div>
+  </section>`;
+const panes = []; // [{ el, side, route, model }]
+function paneFor(side) {
+  let p = panes[side];
+  if (!p) {
+    const el = document.createElement("div");
+    el.className = "route-pane"; el.innerHTML = PANE_HTML;
+    p = panes[side] = { el, side, part: (n) => el.querySelector(`[data-part="${n}"]`) };
+    // this side's own route picker
+    p.part("pick").addEventListener("change", (e) => writeHash(side === 0 ? { route: e.target.value } : { compare: e.target.value }));
+  }
+  return p;
+}
+function layoutPanes() {
+  const host = $("panes"), comparing = !!state.compare;
+  const want = comparing ? [paneFor(0), paneFor(1)] : [paneFor(0)];
+  if (host.children.length !== want.length || [...host.children].some((c, i) => c !== want[i].el)) host.replaceChildren(...want.map((p) => p.el));
+  host.classList.toggle("compare", comparing);
+  document.body.classList.toggle("comparing", comparing);
+  for (const p of want) p.el.querySelector(".pane-pick").classList.toggle("hidden", !comparing);
+  $("compareBtn").classList.toggle("hidden", comparing);
+  $("singleBtn").classList.toggle("hidden", !comparing);
+  $("animCard").classList.toggle("hidden", comparing); // no animation while comparing
+  for (const b of $("panes").querySelectorAll("[data-zoom]")) b.setAttribute("aria-pressed", String(Number(b.dataset.zoom) === state.zoom));
+  return want;
+}
+function fillPickers(routes) {
+  for (const p of panes) if (p) {
+    const cur = p.side === 0 ? state.route : state.compare;
+    p.part("pick").innerHTML = routes.map((r) => `<option ${r === cur ? "selected" : ""}>${esc(r)}</option>`).join("");
+    p.part("pick").value = cur ?? "";
+  }
+}
+
+function renderRoute() {
+  const list = layoutPanes();
+  for (const p of list) renderPane(p);
+  if (!state.compare) syncAnimation();
+}
+
+function renderPane(P) {
+  const m = P.model, route = P.route;
+  const rows = sortDirs(viewRows().filter((r) => r.route === route));
+  P.part("title").textContent = "Route " + route + (state.period === "all" ? "" : " · " + periodLabel());
+  P.part("garages").innerHTML = m.garages.length > 1 || state.garage === "All" ? garageLegend(m.garages) : "";
+  P.part("kind").classList.toggle("hidden", !OVERNIGHT_CIRCULATORS.has(route));
+  if (!rows.length) {
+    P.part("dirCards").innerHTML = `<div class="card dir-card"><h3>No trips</h3><div class="toward">Route ${esc(route)} has no trips leaving in ${esc(periodLabel())}.</div></div>`;
+    for (const n of ["originLegend", "originBars", "originTable", "hoursTable", "graphs", "graphLegend"]) P.part(n).innerHTML = "";
+    return;
+  }
+
+  // --- first / last trip per direction (or "24/7 route") ---
+  const allDay247 = showEnds() && is247(route);
+  const shortCount = (from) => m.trips.filter((t) => t.from === from && t.short && inPeriod(t.begin.sec)).length;
+  const startNote = (t, r) => `<span class="small">${runLabel(t.run, t.garage)}${t.from !== r.from ? " · starts at " + esc(t.from) : ""}</span>`;
+  P.part("dirCards").innerHTML = rows.map((r) => `
+    <div class="card dir-card">
+      <h3>${r.direction ? r.direction + " · " : ""}from ${esc(r.from)}</h3>
+      <div class="toward">toward ${esc(r.toward)}</div>
+      <dl class="facts">
+        ${allDay247 ? `<div><dt>Service</dt><dd>24/7 route</dd></div>`
+          : showEnds() ? `<div><dt>First trip</dt><dd>${fmtLong(r.first)}${startNote(r.firstTrip, r)}</dd></div>
+        <div><dt>Last trip</dt><dd>${fmtLong(r.last)}${startNote(r.lastTrip, r)}</dd></div>` : ""}
+        <div><dt>Trips</dt><dd>${r.trips}<span class="small">${shortCount(r.from)} short</span></dd></div>
+        <div><dt>Every (${state.period === "all" ? "all day" : "average"})</dt><dd>${r.freq == null ? "—" : r.freq + " min"}${showEnds() && !allDay247 ? `<span class="small">span ${fmtSpan(pos(r.last) - pos(r.first))}</span>` : ""}</dd></div>
+      </dl>
+      ${r.garages.length > 1 ? `<div class="by-garage">${byGarageText(r.departures).map(([g, n]) => `<span><span class="swatch" style="background:${garageColor(g)}"></span>${esc(g)}: ${n} trips</span>`).join("")}</div>` : ""}
+    </div>`).join("");
+
+  renderOrigins(P, rows);
+  renderHours(P, rows, m);
+  renderGraphs(P, m, rows);
+}
+
+// --- animation (drawn in the browser by anim-player.js) ---
+// Made when asked for; once made for this route it follows the day / garage / period picked at the top.
+const anim = { player: null, key: null, route: null, loading: 0 };
+const animKey = () => `${state.day}|${state.garage}|${state.route}|${state.period}`;
+function animWindow() {
+  const [a, b] = state.period === "all" ? [0, 30] : WINDOW[state.period];
+  return { from: a * 3600, to: b * 3600, night: state.period === "overnight" };
+}
+async function generateAnimation() {
+  const ticket = ++anim.loading, key = animKey();
+  anim.player ??= AnimPlayer.create($("animPlayer"));
+  $("animPlayer").classList.remove("hidden");
+  $("animGo").textContent = "Regenerate";
+  $("animStatus").textContent = `Loading route ${state.route}…`;
+  try {
+    const d = await anim.player.load({ day: state.day, garage: state.garage, route: state.route, ...animWindow() });
+    if (ticket !== anim.loading) return;
+    anim.key = key; anim.route = state.route;
+    $("animStatus").textContent = `${state.day} · ${state.garage === "All" ? "all garages" : state.garage} · ${periodLabel()} · ${d.buses.length} bus${d.buses.length === 1 ? "" : "es"}` +
+      (d.garages.length > 1 ? ` · ${d.garages.map((g, i) => `${g} ${["circles", "squares", "diamonds"][Math.min(i, 2)]}`).join(", ")}` : "") +
+      (d.missingPaths.length ? ` · ${d.missingPaths.length} moves without a path (skipped)` : "");
+  } catch (e) {
+    if (ticket === anim.loading) $("animStatus").textContent = `Couldn't load the animation: ${e.message}`;
+  }
+}
+function syncAnimation() {
+  if (anim.route && anim.route !== state.route) { // another route: start fresh
+    anim.route = null; anim.key = null; anim.player?.pause();
+    $("animPlayer").classList.add("hidden"); $("animStatus").textContent = ""; $("animGo").textContent = "Generate animation";
+  } else if (anim.key && anim.key !== animKey()) generateAnimation(); // same route, new day / garage / period
+}
+$("animGo").addEventListener("click", generateAnimation);
+
+// --- trip origins (statistics.tripStartsByRoute) ---
+// Categorical colors (the same palette steps as the garages); the table names each part.
+const ORIGINS = [
+  ["pullout", "Pullout", "First trip after leaving the garage", "var(--g1)", "#fff"],
+  ["deadheadSameRoute", "Deadhead, same route", "After an out-of-service move; the bus's previous trip was this route", "var(--g3)", "#fff"],
+  ["fromOtherRoute", "From another route", "The bus's previous trip was a different route", "var(--g4)", "#0b0b0b"],
+  ["turnAround", "Turn around", "Right after another trip on this route, or the first trip after taking over the bus at a terminal (plain R relief)", "var(--g5)", "#fff"],
+];
+// counts of each trip-start kind among some departures: { pullout: n, ..., total }
+function originCounts(deps) {
+  const c = Object.fromEntries(ORIGINS.map(([k]) => [k, 0]));
+  let total = 0;
+  for (const d of deps) if (d.start && d.start in c) { c[d.start]++; total++; }
+  return { ...c, total };
+}
+const pctText = (n, total) => (total ? `${Math.round((1000 * n) / total) / 10}%` : "—");
+function originBar(c, label, cls = "") {
+  const parts = ORIGINS.map(([k, name, , bg, ink]) => ({ k, name, bg, ink, n: c[k] })).filter((p) => p.n > 0);
+  const aria = `${label}: ` + parts.map((p) => `${p.name} ${p.n} (${pctText(p.n, c.total)})`).join(", ");
+  return `<div class="origin-row ${cls}"><div class="lab">${label}</div>
+    <div class="segbar" role="img" aria-label="${esc(aria)}">${parts.map((p) =>
+      `<div style="flex:${p.n} 1 0;background:${p.bg};color:${p.ink}" title="${esc(p.name)}: ${p.n} trips, ${pctText(p.n, c.total)}"><span>${pctText(p.n, c.total)}</span></div>`).join("")}</div>
+    <div class="n">${c.total} trips</div></div>`;
+}
+function renderOrigins(P, rows) {
+  P.part("originLegend").innerHTML = ORIGINS.map(([, name, , bg]) => `<span><span class="swatch" style="background:${bg}"></span>${name}</span>`).join("");
+  const perDir = rows.map((r) => ({ r, all: originCounts(r.departures) }));
+  P.part("originBars").innerHTML = perDir.map(({ r, all }) => {
+    let html = `<div class="origin-dir"><h3 style="margin-bottom:6px">${r.direction ? r.direction + " · " : ""}from ${esc(r.from)}</h3>`;
+    const p = PERIODS.find((q) => q.key === state.period);
+    html += originBar(all, p ? `${p.short}<div class="small">${p.span}</div>` : "All day", "all");
+    return html + "</div>";
+  }).join("");
+  // hide a percentage that doesn't fit its block
+  for (const d of P.part("originBars").querySelectorAll(".segbar > div")) { const sp = d.firstChild; if (sp.offsetWidth + 16 > d.clientWidth) sp.style.visibility = "hidden"; }
+  const dirHead = (r) => `${ABBR[r.direction] ? ABBR[r.direction] + " · " : ""}from ${esc(r.from)}`;
+  P.part("originTable").innerHTML = `
+    <thead><tr><th>Trip starts</th>${perDir.map(({ r }) => `<th class="num">${dirHead(r)}</th>`).join("")}<th>Meaning</th></tr></thead>
+    <tbody>${ORIGINS.map(([k, name, what, bg]) => `<tr><td><span class="swatch" style="background:${bg}"></span>${name}</td>
+      ${perDir.map(({ all }) => `<td class="num">${all[k]} <span class="small">${pctText(all[k], all.total)}</span></td>`).join("")}
+      <td class="small">${what}</td></tr>`).join("")}
+      <tr><td><strong>All trips</strong></td>${perDir.map(({ all }) => `<td class="num"><strong>${all.total}</strong></td>`).join("")}<td></td></tr></tbody>`;
+}
+
+// --- average headway by hour, per direction ---
+function renderHours(P, rows, m) {
+  const byDir = rows.map((r) => {
+    const c = {}, gaps = {};
+    // gaps are measured against the whole day's departures (so the last trip in a period still
+    // has its next departure); only departures in the period are counted
+    const fullRow = state.rows.find((x) => x.route === r.route && x.from === r.from) ?? r;
+    const deps = [...fullRow.departures].sort((a, b) => a.sec - b.sec);
+    deps.forEach((d, i) => {
+      if (!inPeriod(d.sec)) return;
+      const h = Math.floor(pos(d.sec) / 3600);
+      c[h] = (c[h] ?? 0) + 1;
+      if (i + 1 < deps.length) (gaps[h] ??= []).push(deps[i + 1].sec - d.sec);
+    });
+    const avg = {};
+    for (const [h, g] of Object.entries(gaps)) avg[h] = Math.round(g.reduce((a, b) => a + b, 0) / g.length / 60);
+    return { r, c, avg };
+  });
+  const peak = m.stats.peakBusesByRouteByHour?.[P.route] ?? {};
+  const hours = new Set();
+  for (const { c } of byDir) for (const h of Object.keys(c)) hours.add(Number(h));
+  const hs = [...hours].sort((a, b) => a - b);
+  if (!hs.length) { P.part("hoursTable").innerHTML = `<tr><td class="small">No departures.</td></tr>`; return; }
+  const all = []; for (let h = hs[0]; h <= hs[hs.length - 1]; h++) all.push(h);
+  const key = (h) => `${String(h).padStart(2, "0")}:00`;
+  // overnight puts early-morning hours after midnight (28:00 = 4 AM): take the busier of both
+  const peakAt = (h) => {
+    const v = [peak[key(h)], state.period === "overnight" && h >= 24 ? peak[key(h - 24)] : undefined].filter((x) => x != null);
+    return v.length ? Math.max(...v) : null;
+  };
+  P.part("hoursTable").innerHTML = `
+    <thead><tr><th>From</th>${all.map((h) => `<th>${tickLabel(h)}</th>`).join("")}</tr></thead>
+    <tbody>
+      ${byDir.map(({ r, c, avg }) => `<tr><td>${ABBR[r.direction] ? `<strong>${ABBR[r.direction]}</strong> · ` : ""}${esc(r.from)}</td>${all.map((h) => c[h]
+        ? `<td title="${c[h]} departure${c[h] === 1 ? "" : "s"}">${avg[h] ?? "—"}<span class="small">${c[h]} trip${c[h] === 1 ? "" : "s"}</span></td>`
+        : `<td class="small">—</td>`).join("")}</tr>`).join("")}
+      <tr><td>Buses on the route <span class="small">most at once</span></td>${all.map((h) => `<td>${peakAt(h) ?? '<span class="small">—</span>'}</td>`).join("")}</tr>
+    </tbody>`;
+}
+
+// --- string graphs ---
+function renderGraphs(P, m, rows) {
+  const host = P.part("graphs");
+  host.innerHTML = "";
+  P.part("graphLegend").innerHTML = garageLegend(m.garages) +
+    `<span><span class="ring" style="background:var(--ink-2)"></span>Where a short trip starts or ends mid-route</span>
+     <span><span class="ring" style="border:1.5px solid var(--ink-2)"></span>Relief: another run takes over</span>`;
+  if (!m.trips.length) return;
+  const order = m.order;
+  const cum = [0];
+  for (let i = 1; i < order.length; i++) cum.push(cum[i - 1] + Math.max(km(order[i - 1], order[i]), 0.05));
+  const total = cum[cum.length - 1] || 1;
+  const minGap = Math.min(...cum.slice(1).map((c, i) => c - cum[i]));
+  const plotH = Math.max(220, Math.min(440, (16 * total) / minGap));
+  const top = 24, tickY = 12, bottom = 10, H = top + plotH + bottom;
+  const yOf = new Map(order.map((loc, i) => [loc, top + (cum[i] / total) * plotH]));
+
+  // only trips that leave in the chosen period; a whole trip moves with its departure (overnight)
+  const shown = m.trips.filter((t) => inPeriod(t.begin.sec));
+  if (!shown.length) return;
+  const off = (t) => shiftOf(t.begin.sec);
+  const tEnd = Math.max(...shown.map((t) => t.end.sec + off(t)));
+  let h0, h1;
+  if (state.period === "all") { h0 = Math.floor(Math.min(...shown.map((t) => t.begin.sec)) / 3600); h1 = Math.ceil(tEnd / 3600); }
+  else { const [a, b] = WINDOW[state.period]; h0 = Math.floor(a); h1 = Math.max(Math.ceil(b), Math.ceil(tEnd / 3600)); }
+  const hostW = host.clientWidth || 900;
+  const labelW = hostW < 640 ? 110 : 220;
+  const plotW = Math.max(200, (hostW - labelW) * state.zoom);
+  const pad = 22;
+  const x = (s) => pad + ((s - h0 * 3600) / ((h1 - h0) * 3600)) * (plotW - 2 * pad);
+  const every = tickEvery((plotW - 2 * pad) / (h1 - h0));
+
+  for (const r of rows) {
+    const trips = shown.filter((t) => t.from === r.from);
+    const card = document.createElement("div");
+    card.style.marginBottom = "18px";
+    const short = trips.filter((t) => t.short).length;
+    card.innerHTML = `<h3 style="margin-bottom:6px">${r.direction ? r.direction + " · " : ""}from ${esc(r.from)} <span class="small" style="font-weight:400">→ ${esc(r.toward)} · ${trips.length} trips, ${short} short</span></h3>`;
+    const g = document.createElement("div");
+    g.className = "graph viz";
+    card.appendChild(g);
+    host.appendChild(card);
+
+    const lab = el("svg", { width: labelW, height: H, class: "labels" }, g);
+    let lastY = -Infinity;
+    order.forEach((loc, i) => {
+      const y = yOf.get(loc), term = i === 0 || i === order.length - 1;
+      if (!term && y - lastY < 13) return;
+      if (!term && i === order.length - 2 && yOf.get(order[order.length - 1]) - y < 13) return;
+      const t = el("text", { x: labelW - 8, y: y + 4, "text-anchor": "end", class: "stop" + (term ? " term" : "") }, lab);
+      t.textContent = loc;
+      fitText(t, labelW - 12);
+      lastY = y;
+    });
+
+    const wrap = document.createElement("div");
+    wrap.className = "plot";
+    g.appendChild(wrap);
+    const svg = el("svg", { width: plotW, height: H, role: "img",
+      "aria-label": `String graph of route ${P.route} trips from ${r.from}` }, wrap);
+    for (const loc of order) el("line", { x1: 0, x2: plotW, y1: yOf.get(loc), y2: yOf.get(loc), class: "stopline" }, svg);
+    for (let hr = h0; hr <= h1; hr++) {
+      const gx = x(hr * 3600);
+      el("line", { x1: gx, x2: gx, y1: top - 4, y2: H - bottom, class: hr % 24 === 0 ? "midnight" : "grid" }, svg);
+      if (hr % every === 0) el("text", { x: gx, y: tickY, "text-anchor": "middle", class: "tick" }, svg).textContent = tickLabel(hr);
+    }
+    for (const t of trips) {
+      const color = garageColor(t.garage);
+      const o = off(t);
+      const grp = el("g", { class: "trip" }, svg);
+      const pts = t.points.map((p) => `${x(p.sec + o).toFixed(1)},${yOf.get(p.location).toFixed(1)}`).join(" ");
+      el("polyline", { points: pts, class: "line", stroke: color }, grp);
+      el("polyline", { points: pts, class: "hitline" }, grp);
+      if (t.startsShort) el("circle", { cx: x(t.begin.sec + o), cy: yOf.get(t.begin.location), r: 3.5, class: "end", fill: color }, grp);
+      if (t.endsShort) el("circle", { cx: x(t.end.sec + o), cy: yOf.get(t.end.location), r: 3.5, class: "end", fill: color }, grp);
+      for (const rel of t.reliefs) el("circle", { cx: x(rel.sec + o), cy: yOf.get(rel.location), r: 3, class: "relief", stroke: color }, grp);
+      grp.addEventListener("mouseenter", () => { svg.classList.add("focus"); grp.classList.add("hot"); grp.parentNode.appendChild(grp); });
+      grp.addEventListener("mouseleave", () => { svg.classList.remove("focus"); grp.classList.remove("hot"); hideTip(); });
+      grp.addEventListener("mousemove", (ev) => showTip(ev, tripTip(t)));
+    }
+  }
+  const plots = [...host.querySelectorAll(".plot")];
+  let syncing = false;
+  for (const p of plots) p.addEventListener("scroll", () => {
+    if (syncing) return;
+    syncing = true;
+    for (const q of plots) if (q !== p) q.scrollLeft = p.scrollLeft;
+    requestAnimationFrame(() => { syncing = false; });
+  });
+}
+
+function tripTip(t) {
+  const runs = t.runs.length > 1 ? `Runs ${t.runs.map(esc).join(" → ")}` : `Run ${esc(t.runs[0])}`;
+  const notes = [];
+  if (t.startsShort) notes.push(`Starts at ${esc(t.begin.location)}, short of ${esc(t.from)}`);
+  if (t.endsShort) notes.push(`Ends at ${esc(t.end.location)}, short of ${esc(t.toward)}`);
+  for (const r of t.reliefs) notes.push(`Relief at ${esc(r.location)}, ${fmt(r.sec)}: ${esc(r.to)} takes over from ${esc(r.from)}`);
+  return `
+    <div class="t">${runs}${t.short ? " · short trip" : ""}</div>
+    <dl>
+      <dt>Garage</dt><dd><span class="swatch" style="background:${garageColor(t.garage)}"></span>${esc(t.garage)}</dd>
+      <dt>Departs</dt><dd>${fmtLong(t.begin.sec)} · ${esc(t.begin.location)}</dd>
+      <dt>Arrives</dt><dd>${fmtLong(t.end.sec)} · ${esc(t.end.location)}</dd>
+      <dt>Running</dt><dd>${Math.round((t.end.sec - t.begin.sec) / 60)} min</dd>
+    </dl>
+    ${notes.map((n) => `<div class="note" style="margin-top:4px">${n}</div>`).join("")}`;
+}
+
+// =====================================================================
+// State, loading, controls
+// =====================================================================
+function readHash() {
+  const p = new URLSearchParams(location.hash.slice(1));
+  const day = p.get("day"), period = p.get("period");
+  return { day: DAYS.includes(day) ? day : "Weekday", garage: p.get("garage") || "All", route: p.get("route") || null,
+    compare: p.get("route") && p.get("compare") || null,
+    period: PERIODS.some((q) => q.key === period) ? period : "all" };
+}
+function writeHash(next) {
+  const s = { day: state.day, garage: state.garage, route: state.route, compare: state.compare, period: state.period, ...next };
+  const p = new URLSearchParams({ day: s.day, garage: s.garage });
+  if (s.period !== "all") p.set("period", s.period);
+  if (s.route) p.set("route", s.route);
+  if (s.route && s.compare) p.set("compare", s.compare);
+  const h = "#" + p.toString();
+  if (location.hash !== h) location.hash = h; else apply();
+}
+function openRoute(route) { writeHash({ route }); }
+
+function showEmpty(msg) {
+  $("content").classList.add("hidden");
+  $("routeView").classList.add("hidden");
+  $("empty").classList.remove("hidden");
+  $("emptyMsg").innerHTML = esc(msg);
+}
+
+let applying = 0;
+async function apply() {
+  const ticket = ++applying;
+  const want = readHash();
+  const info = state.days.find((d) => d.day === want.day);
+  if (info && want.garage !== "All" && !info.garages.includes(want.garage)) want.garage = "All"; // e.g. no Forest Glen on Sunday
+  Object.assign(state, want);
+  // controls reflect the state
+  document.querySelectorAll("[data-day]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.day === state.day)));
+  $("garageSelect").innerHTML = `<option value="All">All garages</option>` +
+    (info?.garages ?? []).map((g) => `<option ${g === state.garage ? "selected" : ""}>${esc(g)}</option>`).join("");
+  $("garageSelect").value = state.garage;
+  $("periodSelect").value = state.period;
+  hideTip();
+  try {
+    if (!state.summary || state.summary.day !== state.day || state.summary.garage !== state.garage) {
+      showEmpty(`Loading ${state.day}${state.garage === "All" ? " for all garages" : " for " + state.garage}…`);
+      const s = await getJSON(`api/summary?day=${encodeURIComponent(state.day)}&garage=${encodeURIComponent(state.garage)}`);
+      if (ticket !== applying) return;
+      state.summary = s;
+      state.rows = buildRows(s);
+    }
+    const s = state.summary;
+    $("source").textContent = `${state.day} · ${state.garage === "All" ? "all garages" : state.garage} · ${periodLabel()} · ${s.runCount.toLocaleString()} runs from ${s.sources.length} paddle file${s.sources.length === 1 ? "" : "s"}`;
+    const routes = [...new Set(state.rows.map((r) => r.route))].sort(routeOrder);
+    if (state.route && !routes.includes(state.route)) state.route = null;
+    if (state.compare && (!state.route || !routes.includes(state.compare))) state.compare = state.route ? routes.find((r) => r !== state.route) ?? null : null;
+    state.routes = routes;
+    $("gotoSelect").innerHTML = `<option value="">All Route Summary</option>` +
+      routes.map((r) => `<option ${r === state.route ? "selected" : ""}>${esc(r)}</option>`).join("");
+    $("gotoSelect").value = state.route ?? "";
+    document.querySelectorAll(".overview-only").forEach((e) => e.classList.toggle("hidden", !!state.route));
+
+    if (state.route) {
+      // each side's route (data cached per day / garage / route by getJSON; the model per pane)
+      const sides = state.compare ? [state.route, state.compare] : [state.route];
+      const need = sides.filter((r, i) => { const p = panes[i]; return !p || p.key !== `${state.day}|${state.garage}|${r}`; });
+      if (need.length) showEmpty(`Loading route ${need.join(" and ")}…`);
+      const datas = await Promise.all(sides.map((r) => getJSON(`api/route?day=${encodeURIComponent(state.day)}&garage=${encodeURIComponent(state.garage)}&route=${encodeURIComponent(r)}`)));
+      if (ticket !== applying) return;
+      sides.forEach((r, i) => {
+        const p = paneFor(i), key = `${state.day}|${state.garage}|${r}`;
+        if (p.key !== key) { p.key = key; p.route = r; p.model = routeModel(r, datas[i]); }
+      });
+      fillPickers(routes);
+      $("empty").classList.add("hidden");
+      $("content").classList.add("hidden");
+      $("routeView").classList.remove("hidden");
+      renderRoute();
+      return;
+    }
+    $("empty").classList.add("hidden");
+    $("routeView").classList.add("hidden");
+    $("content").classList.remove("hidden");
+    renderOverview();
+  } catch (e) {
+    if (ticket === applying) showEmpty(`Couldn't load: ${e.message}`);
+  }
+}
+
+// --- garage animation (summary screen, one garage picked) ---
+// Made when asked for; once made it follows the day / garage / period picked at the top.
+const ganim = { player: null, key: null, loading: 0 };
+const ganimKey = () => `${state.day}|${state.garage}|${state.period}`;
+async function generateGarageAnimation() {
+  const ticket = ++ganim.loading, key = ganimKey();
+  ganim.player ??= AnimPlayer.create($("garageAnimPlayer"));
+  $("garageAnimPlayer").classList.remove("hidden");
+  $("garageAnimGo").textContent = "Regenerate";
+  $("garageAnimStatus").textContent = `Loading ${state.garage}…`;
+  try {
+    const d = await ganim.player.load({ day: state.day, garage: state.garage, ...animWindow() });
+    if (ticket !== ganim.loading) return;
+    ganim.key = key;
+    $("garageAnimStatus").textContent = `${state.day} · ${state.garage} · ${periodLabel()} · ${d.buses.length} bus${d.buses.length === 1 ? "" : "es"} on ${d.routes.length} routes` +
+      (d.missingPaths.length ? ` · ${d.missingPaths.length} moves without a path (skipped)` : "");
+  } catch (e) {
+    if (ticket === ganim.loading) $("garageAnimStatus").textContent = `Couldn't load the animation: ${e.message}`;
+  }
+}
+function syncGarageAnimation() {
+  const one = state.garage !== "All";
+  $("garageAnimCard").classList.toggle("hidden", !one);
+  $("garageAnimTitle").textContent = one ? `${state.garage} garage animation` : "Garage animation";
+  if (!one) { ganim.player?.pause(); return; }
+  if (ganim.key && ganim.key.split("|")[1] !== state.garage) { // another garage: start fresh
+    ganim.key = null; ganim.player?.pause();
+    $("garageAnimPlayer").classList.add("hidden"); $("garageAnimStatus").textContent = ""; $("garageAnimGo").textContent = "Generate animation";
+  } else if (ganim.key && ganim.key !== ganimKey()) generateGarageAnimation(); // same garage, new day / period
+}
+$("garageAnimGo").addEventListener("click", generateGarageAnimation);
+
+function renderOverview() {
+  // first / last trip sorting and headings only for the whole day
+  const ends = showEnds();
+  for (const o of $("sortSelect").querySelectorAll("option[data-ends]")) { o.hidden = !ends; o.disabled = !ends; }
+  $("sortSelect").value = ends ? state.sort : "route";
+  $("chartTitle").textContent = ends ? "First and last trips by route" : `Departures by route · ${periodLabel()}`;
+  $("chartSub").textContent = ends ? "Each bar runs from a terminal's first departure to its last; dots are the departures, colored by garage. One row per direction."
+    : "Dots are the departures in this period, colored by garage; the bar runs between them. One row per direction.";
+  $("tableTitle").textContent = ends ? "First and last trips by route" : `Trips by route · ${periodLabel()}`;
+  $("tableSub").textContent = ends ? "Departure times of the first and last trip from each terminal. Click a route for a closer look."
+    : "Trips leaving in this period and how often, from each terminal. Click a route for a closer look.";
+  renderTiles();
+  syncGarageAnimation();
+  const garages = [...new Set(state.rows.flatMap((r) => r.garages))].sort(garageSort);
+  for (const l of document.querySelectorAll(".garage-legend")) l.innerHTML = garageLegend(garages);
+  $("chartCard").classList.toggle("hidden", state.view !== "chart");
+  $("tableCard").classList.toggle("hidden", state.view !== "table");
+  if (state.view === "chart") renderChart(); else renderTable();
+}
+
+function rerender() {
+  if (!state.summary) return;
+  hideTip();
+  if (state.route && panes[0]?.model) renderRoute(); else renderOverview();
+}
+
+async function init() {
+  try {
+    state.days = await getJSON("api/days");
+  } catch {
+    return showEmpty("Start the visualizer with: npm run viz");
+  }
+  apply();
+}
+
+for (const b of document.querySelectorAll("[data-day]")) b.addEventListener("click", () => writeHash({ day: b.dataset.day }));
+$("garageSelect").addEventListener("change", (e) => writeHash({ garage: e.target.value }));
+$("gotoForm").addEventListener("submit", (e) => e.preventDefault());
+$("gotoSelect").addEventListener("change", (e) => writeHash({ route: e.target.value || null }));
+$("backBtn").addEventListener("click", () => writeHash({ route: null, compare: null }));
+// compare: start with the next route in the list on the right; each side then has its own picker
+$("compareBtn").addEventListener("click", () => {
+  const rs = state.routes ?? [], i = rs.indexOf(state.route);
+  writeHash({ compare: rs[(i + 1) % rs.length] !== state.route ? rs[(i + 1) % rs.length] : rs[0] });
+});
+$("singleBtn").addEventListener("click", () => writeHash({ compare: null }));
+$("sortSelect").addEventListener("change", (e) => { state.sort = e.target.value; rerender(); });
+const pressGroup = (attr, b) => document.querySelectorAll(`[${attr}]`).forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+for (const b of document.querySelectorAll("[data-clock]")) b.addEventListener("click", () => { state.clock = b.dataset.clock; pressGroup("data-clock", b); rerender(); });
+for (const b of document.querySelectorAll("[data-view]")) b.addEventListener("click", () => { state.view = b.dataset.view; pressGroup("data-view", b); rerender(); });
+$("periodSelect").addEventListener("change", (e) => writeHash({ period: e.target.value }));
+// string-graph zoom (the buttons are in each pane; one zoom for both sides)
+$("panes").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-zoom]");
+  if (!b) return;
+  state.zoom = Number(b.dataset.zoom);
+  for (const x of $("panes").querySelectorAll("[data-zoom]")) x.setAttribute("aria-pressed", String(Number(x.dataset.zoom) === state.zoom));
+  for (const p of panes) if (p?.model && p.el.isConnected) renderGraphs(p, p.model, sortDirs(viewRows().filter((r) => r.route === p.route)));
+});
+window.addEventListener("hashchange", () => { apply(); window.scrollTo(0, 0); });
+let resizeTimer;
+window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(rerender, 150); });
+
+init();
+</script>
+</body>
+</html>

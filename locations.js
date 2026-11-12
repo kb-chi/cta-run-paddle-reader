@@ -1,0 +1,645 @@
+// locations.js — what each paddle time-point name means, so it can be mapped.
+//
+// Each entry:
+//   type:   "intersection" | "station" | "landmark" | "garage"
+//   name:   readable name
+//   query:  text a geocoder can use (ArcGIS style: "Street & Street, City, IL")
+//   city:   municipality
+//   review: true if the meaning is a guess and needs checking
+//   lat/lon, gtfsStopIds, coordsFrom: filled in below from CTA's GTFS stops file
+//
+// Lake Shore Drive is officially "DuSable Lake Shore Dr" (renamed 2021).
+
+import { GTFS_LOCATIONS } from "./locations-gtfs.js";
+
+const X = (a, b, city = "Chicago", extra = {}) => ({
+  type: "intersection", name: `${a} & ${b}`, query: `${a} & ${b}, ${city}, IL`, city, ...extra,
+});
+const STA = (station, line, city = "Chicago", extra = {}) => ({
+  type: "station", name: `${station} (${line})`, query: `${station} station, ${city}, IL`, city, line, ...extra,
+});
+const PLACE = (type, name, query, city = "Chicago", extra = {}) => ({ type, name, query, city, ...extra });
+const REVIEW = { review: true };
+
+export const LOCATIONS = {
+  // ---- Western Ave (49 / X49 / 49B) ----
+  "26th WESTERN": X("26th St", "Western Ave"),
+  "49th WESTERN": X("49th St", "Western Ave"),
+  "59th WESTERN": X("59th St", "Western Ave"),
+  "69th WESTERN": X("69th St", "Western Ave"),
+  "79th WESTERN": X("79th St", "Western Ave"),
+  "ARCHER WESTRN": X("Archer Ave", "Western Ave"),
+  "BELMNT WESTRN": X("Belmont Ave", "Western Ave"),
+  "BERWYN WESTRN": X("Berwyn Ave", "Western Ave"),
+  "BRCHWD WESTRN": X("Birchwood Ave", "Western Ave"),
+  "CRTLND WESTRN": X("Cortland St", "Western Ave"),
+  "DEVON WESTERN": X("Devon Ave", "Western Ave"),
+  "DIVISN WESTRN": X("Division St", "Western Ave"),
+  "FOSTER WESTRN": X("Foster Ave", "Western Ave"),
+  "HARISN WESTRN": X("Harrison St", "Western Ave"),
+  "LAWRNC WESTRN": X("Lawrence Ave", "Western Ave"),
+  "LUNT WESTERN": X("Lunt Ave", "Western Ave"),
+  "ADDISN WESTRN": X("Addison St", "Western Ave"),
+
+  // ---- Addison (152) ----
+  "ADD CAMPBELL": X("Addison St", "Campbell Ave"),
+  "ADDISN ASHLND": X("Addison St", "Ashland Ave"),
+  "ADDISN AUSTIN": X("Addison St", "Austin Ave"),
+  "ADDISN CENTRL": X("Addison St", "Central Ave"),
+  "ADDISN CICERO": X("Addison St", "Cicero Ave"),
+  "ADDISN CUMBER": X("Addison St", "Cumberland Ave"),
+  "ADDISN HARLEM": X("Addison St", "Harlem Ave"),
+  "ADDISN KEDZIE": X("Addison St", "Kedzie Ave"),
+  "ADDISN LAKSHR": X("Addison St", "DuSable Lake Shore Dr"),
+  "ADDISN MILWKE": X("Addison St", "Milwaukee Ave"),
+  "ADDISN PULASK": X("Addison St", "Pulaski Rd"),
+  "ADDISON MILWAUKEE": X("Addison St", "Milwaukee Ave"),
+
+  // ---- Clark (22) / Broadway (36) / Sheridan (151) ----
+  "ARTHUR CLARK": X("Arthur Ave", "Clark St"),
+  "CLARK HALSTED": X("Clark St", "Halsted St"),
+  "DEVON CLARK": X("Devon Ave", "Clark St"),
+  "DIVERSY CLARK": X("Diversey Pkwy", "Clark St"),
+  "DIVISON CLARK": X("Division St", "Clark St"),
+  "FOSTER CLARK": X("Foster Ave", "Clark St"),
+  "HARISON CLARK": X("Harrison St", "Clark St"),
+  "IRVING CLARK": X("Irving Park Rd", "Clark St"),
+  "KINZIE CLARK": X("Kinzie St", "Clark St"),
+  "KINZIE DEARBN": X("Kinzie St", "Dearborn St"),
+  "LaSALLE CLARK": X("LaSalle Dr", "Clark St"),
+  "DEVON BROADWY": X("Devon Ave", "Broadway"),
+  "FOSTER BRDWAY": X("Foster Ave", "Broadway"),
+  "WAVELAND BDWY": X("Waveland Ave", "Broadway"),
+  "CHICAGO STATE": X("Chicago Ave", "State St"),
+  "LAKE STATE": X("Lake St", "State St"),
+  "BELMNT SHERDN": X("Belmont Ave", "Sheridan Rd"),
+  "BRIAR SHERIDN": X("Briar Pl", "Sheridan Rd"),
+  "BYN MWR SHRDN": X("Bryn Mawr Ave", "Sheridan Rd"),
+  "FOSTER SHERDN": X("Foster Ave", "Sheridan Rd"),
+  "IRVING SHERDN": X("Irving Park Rd", "Sheridan Rd"),
+  "SHERDN LAKSHR": X("Sheridan Rd", "DuSable Lake Shore Dr"),
+  "FULLERTON STK": X("Fullerton Pkwy", "Stockton Dr"),
+
+  // ---- Downtown ----
+  "ADAMS CANAL": X("Adams St", "Canal St"),
+  "ADAMS WACKER": X("Adams St", "Wacker Dr"),
+  "DELAWARE MICH": X("Delaware Pl", "Michigan Ave"),
+  "HARISON STATE": X("Harrison St", "State St"),
+  "IdaBWls FRKLN": X("Ida B. Wells Dr", "Franklin St"),
+  "JACKSN FRNKLN": X("Jackson Blvd", "Franklin St"),
+  "RANDLPH STATE": X("Randolph St", "State St"),
+  "RNDLPH COLMBS": X("Randolph St", "Columbus Dr"),
+  "RNDLPH MICHGN": X("Randolph St", "Michigan Ave"),
+  "S WATER MICH": X("South Water St", "Michigan Ave"),
+  "WACKER COLUMBUS": X("Wacker Dr", "Columbus Dr"),
+  "WACKR COLUMBS": X("Wacker Dr", "Columbus Dr"),
+  "WACKR LaSALLE": X("Wacker Dr", "LaSalle St"),
+  "WACKR MICHIGN": X("Wacker Dr", "Michigan Ave"),
+  "WASHGTN CANAL": X("Washington Blvd", "Canal St"),
+  "WASHGTN STATE": X("Washington St", "State St"),
+
+  // ---- Lakefront (146 / 147 / 148 / 135) ----
+  "FOSTER MARINE": X("Foster Ave", "Marine Dr"),
+  "GRACE LAKESHR": X("Grace St", "DuSable Lake Shore Dr"),
+  "IRVING LAKSHR": PLACE("intersection", "Irving Park Rd & DuSable Lake Shore Dr ramps", "Irving Park Rd & DuSable Lake Shore Dr, Chicago, IL", "Chicago",
+    { note: "Time point at the on/off ramps, not a bus stop" }),
+  "MNTRSE MARINE": X("Montrose Ave", "Marine Dr"),
+  "WAVLND LAKSHR": X("Waveland Ave", "DuSable Lake Shore Dr"),
+  "WILSON CLRNDN": X("Wilson Ave", "Clarendon Ave"),
+  "WILSON LAKSHR": PLACE("intersection", "Wilson Ave & DuSable Lake Shore Dr ramps", "Wilson Ave & DuSable Lake Shore Dr, Chicago, IL", "Chicago",
+    { note: "Time point at the on/off ramps, not a bus stop" }),
+  "WILSON MARINE": X("Wilson Ave", "Marine Dr"),
+  "BITTERSWET MD": X("Bittersweet Pl", "Marine Dr"),
+
+  // ---- Damen (50) / Kimball-Homan (82) / Ashland (9) area ----
+  "ASHLAND CLARK": PLACE("intersection", "1559 W Edgewater Ave (near Ashland & Clark)", "1559 W Edgewater Ave, Chicago, IL"),
+  "ASHLAND FOSTER": X("Ashland Ave", "Foster Ave"),
+  "CERMAK DAMEN": X("Cermak Rd", "Damen Ave"),
+  "CHICAGO DAMEN": X("Chicago Ave", "Damen Ave"),
+  "DIVERSY DAMEN": X("Diversey Ave", "Damen Ave"),
+  "FOSTER DAMEN": X("Foster Ave", "Damen Ave"),
+  "IRVING DAMEN": X("Irving Park Rd", "Damen Ave"),
+  "JACKSON DAMEN": X("Jackson Blvd", "Damen Ave"),
+  "NORTH DAMEN": X("North Ave", "Damen Ave"),
+  "DIVISN ASHLND": X("Division St", "Ashland Ave"),
+  "BELMNT HALSTD": X("Belmont Ave", "Halsted St"),
+  "GRAND HALSTED": X("Grand Ave", "Halsted St"),
+  "BELMNT KIMBAL": X("Belmont Ave", "Kimball Ave"),
+  "CARMEN KIMBAL": X("Carmen Ave", "Kimball Ave"),
+  "FOSTER KIMBALL": X("Foster Ave", "Kimball Ave"),
+  "FULRTN KIMBAL": X("Fullerton Ave", "Kimball Ave"),
+  "LAWRNC KIMBAL": X("Lawrence Ave", "Kimball Ave"),
+  "NORTH KIMBALL": X("North Ave", "Kimball Ave"),
+  "CHICAGO HOMAN": X("Chicago Ave", "Homan Ave"),
+  "CONGRES HOMAN": X("Congress Pkwy", "Homan Ave"),
+  "JACKSON HOMAN": X("Jackson Blvd", "Homan Ave"),
+  "ROSEVLT HOMAN": X("Roosevelt Rd", "Homan Ave"),
+
+  // ---- Kedzie / California / Foster / Devon (93, 92, 155, 82) ----
+  "CATALPA KEDZE": X("Catalpa Ave", "Kedzie Ave"),
+  "DEVON KEDZIE": X("Devon Ave", "Kedzie Ave"),
+  "FOSTER KEDZIE": X("Foster Ave", "Kedzie Ave"),
+  "LAWRNC KEDZIE": X("Lawrence Ave", "Kedzie Ave"),
+  "BELMONT CALIF": X("Belmont Ave", "California Ave"),
+  "DEVON CALIFNA": X("Devon Ave", "California Ave"),
+  "FOSTER CALIF": X("Foster Ave", "California Ave"),
+  "HOWARD CALIF": X("Howard St", "California Ave"),
+  "IRVING CALIF": X("Irving Park Rd", "California Ave"),
+  "LINCOLN CALIF": X("Lincoln Ave", "California Ave"),
+  "THRNDLE CALIF": X("Thorndale Ave", "California Ave"),
+  "TOUHY CALIFNA": X("Touhy Ave", "California Ave"),
+  "FOSTER ALBANY": X("Foster Ave", "Albany Ave"),
+  "FOSTER LINCON": X("Foster Ave", "Lincoln Ave"),
+  "HOWARD McCRMK": X("Howard St", "McCormick Blvd", "Evanston"),
+
+  // ---- Evanston / Skokie ----
+  "CENTRL COWPER": X("Central St", "Cowper Ave", "Evanston"),
+  "CENTRL CRWFRD": X("Central St", "Crawford Ave", "Evanston"),
+  "CNTRL GRN BAY": X("Central St", "Green Bay Rd", "Evanston"),
+  "CHURCH BENSON": X("Church St", "Benson Ave", "Evanston"),
+  "CHURCH DODGE": X("Church St", "Dodge Ave", "Evanston"),
+  "DAVIS BENSON": X("Davis St", "Benson Ave", "Evanston"),
+  "EMERSON DODGE": X("Emerson St", "Dodge Ave", "Evanston"),
+  "HOWARD ASBURY": X("Howard St", "Asbury Ave", "Evanston"),
+  "MAIN CHICAGO": X("Main St", "Chicago Ave", "Evanston"),
+  "OAKTON SKOKIE": X("Oakton St", "Skokie Blvd", "Skokie"),
+
+  // ---- Train stations ----
+  "35th ORANGE L": STA("35th/Archer", "Orange Line"),
+  "BERWYN RED L": STA("Berwyn", "Red Line"),
+  "DAVIS PURPL L": STA("Davis", "Purple Line", "Evanston"),
+  "DEMPSTR YEL L": STA("Dempster-Skokie", "Yellow Line", "Skokie"),
+  "HOWARD L": STA("Howard", "Red, Purple and Yellow Lines"),
+  "LOGAN SQ L": STA("Logan Square", "Blue Line"),
+  "MORSE RED L": STA("Morse", "Red Line"),
+  "ROOSEVELT L": STA("Roosevelt", "Red, Orange and Green Lines"),
+  "WESTERN BRN L": STA("Western", "Brown Line"),
+  "LaSALLE METRA": PLACE("station", "LaSalle Street Station (Metra)", "LaSalle Street Station, Chicago, IL"),
+  "UNION STATION": PLACE("station", "Union Station", "Union Station, 225 S Canal St, Chicago, IL"),
+
+  // ---- Landmarks / terminals ----
+  "PLANETARIUM": PLACE("landmark", "Adler Planetarium", "Adler Planetarium, 1300 S DuSable Lake Shore Dr, Chicago, IL"),
+  "CONGRES PLAZA": PLACE("landmark", "Congress Plaza (just east of Michigan Ave & Congress Pkwy)", "500 S Congress Plaza Dr, Chicago, IL", "Chicago",
+    { note: "Bus stands in the street slightly east of Michigan Ave at Congress Pkwy" }),
+  "EVANSTON H.S.": PLACE("landmark", "Evanston Township High School", "Evanston Township High School, 1600 Dodge Ave, Evanston, IL", "Evanston"),
+  "LINCOLNWD CTR": PLACE("landmark", "Lincolnwood Town Center", "Lincolnwood Town Center, Lincolnwood, IL", "Lincolnwood"),
+  "OLD ORCHARD": PLACE("landmark", "Westfield Old Orchard (bus terminal)", "Old Orchard bus turnaround, Skokie, IL", "Skokie"),
+  "RECREATION DR": PLACE("landmark", "3575 N Recreation Dr", "3575 N Recreation Dr, Chicago, IL"),
+
+  // ===================== Kedzie garage routes =====================
+  // ---- Roosevelt (12) ----
+  "15 pl INDIANA": X("15th Pl", "Indiana Ave"),
+  "HARISN CENTRL": X("Harrison St", "Central Ave"),
+  "ROSVLT ASHLND": X("Roosevelt Rd", "Ashland Ave"),
+  "ROSVLT CICERO": X("Roosevelt Rd", "Cicero Ave"),
+  "ROSVLT HALSTD": X("Roosevelt Rd", "Halsted St"),
+  "ROSVLT KEDZIE": X("Roosevelt Rd", "Kedzie Ave"),
+  "ROSVLT MICHGN": X("Roosevelt Rd", "Michigan Ave"),
+  "ROSVLT PULASK": X("Roosevelt Rd", "Pulaski Rd"),
+  "ROSVLT RACINE": X("Roosevelt Rd", "Racine Ave"),
+  "ROSVLT WESTRN": X("Roosevelt Rd", "Western Ave"),
+
+  // ---- 16th / 18th (18) ----
+  "16th CICERO": X("16th St", "Cicero Ave"),
+  "16th KEDZIE": X("16th St", "Kedzie Ave"),
+  "16th PULASKI": X("16th St", "Pulaski Rd"),
+  "18th DAMEN": X("18th St", "Damen Ave"),
+  "18th HALSTED": X("18th St", "Halsted St"),
+  "OGDEN CALIFNA": X("Ogden Ave", "California Ave"),
+
+  // ---- Cermak (21) ----
+  "24 pl KING DR": X("24th Pl", "Martin Luther King Dr"),
+  "25th INDIANA": X("25th St", "Indiana Ave"),
+  "CERMAK 54th": X("Cermak Rd", "54th Ave", "Cicero"),
+  "CERMAK ASHLND": X("Cermak Rd", "Ashland Ave"),
+  "CERMAK CEN PK": X("Cermak Rd", "Central Park Ave"),
+  "CERMAK CICERO": X("Cermak Rd", "Cicero Ave"),
+  "CERMAK HALSTD": X("Cermak Rd", "Halsted St"),
+  "CERMAK KEDZIE": X("Cermak Rd", "Kedzie Ave"),
+  "CERMAK PULASK": X("Cermak Rd", "Pulaski Rd"),
+  "CERMAK RDGLND": X("Cermak Rd", "Ridgeland Ave", "Berwyn"),
+  "CERMAK STATE": X("Cermak Rd", "State St"),
+  "CERMAK WESTRN": X("Cermak Rd", "Western Ave"),
+  "N RIVERSIDE": PLACE("landmark", "North Riverside Park Mall", "North Riverside Park Mall, 7501 W Cermak Rd, North Riverside, IL", "North Riverside"),
+
+  // ---- 31st (35) ----
+  "31st KEDZIE": X("31st St", "Kedzie Ave"),
+  "31st ST BEACH": PLACE("landmark", "31st Street Beach (turnaround)", "31st Street Beach, 3100 S DuSable Lake Shore Dr, Chicago, IL"),
+  "35 COTTAGE GR": X("35th St", "Cottage Grove Ave"),
+  "35th ASHLAND": X("35th St", "Ashland Ave"),
+  "36th KEDZIE": X("36th St", "Kedzie Ave"),
+
+  // ---- Kedzie (52) ----
+  "63 pl KEDZIE": X("63rd Pl", "Kedzie Ave"),
+  "ARCHER KEDZIE": X("Archer Ave", "Kedzie Ave"),
+  "CHICAGO TROY": X("Chicago Ave", "Troy St"),
+  "VBUREN KEDZIE": X("Van Buren St", "Kedzie Ave"),
+
+  // ---- Blue Island / 26th (60) ----
+  "24 pl CICERO": X("24th Pl", "Cicero Ave", "Cicero"),
+  "26th KEDZIE": X("26th St", "Kedzie Ave"),
+  "26th PULASKI": X("26th St", "Pulaski Rd"),
+  "BL ISL WESTRN": X("Blue Island Ave", "Western Ave"),
+  "HARBOR POINT": PLACE("landmark", "Harbor Point (Harbor Dr & Randolph St)", "155 N Harbor Dr, Chicago, IL"),
+  "HARISN HALSTD": X("Harrison St", "Halsted St"),
+  "JACKSN CLINTN": X("Jackson Blvd", "Clinton St"),
+
+  // ---- Kostner / Central Park area (82) ----
+  "31st KOMENSKY": X("31st St", "Komensky Ave"),
+
+  // ---- Jackson (126) ----
+  "ADAMS CLINTON": X("Adams St", "Clinton St"),
+  "HARISN ASHLND": X("Harrison St", "Ashland Ave"),
+  "JACKSN AUSTIN": X("Jackson Blvd", "Austin Blvd"),
+  "JACKSN CICERO": X("Jackson Blvd", "Cicero Ave"),
+  "JACKSN KEDZIE": X("Jackson Blvd", "Kedzie Ave"),
+  "JACKSN PULASK": X("Jackson Blvd", "Pulaski Rd"),
+  "JACKSN RACINE": X("Jackson Blvd", "Racine Ave"),
+  "JACKSN WESTRN": X("Jackson Blvd", "Western Ave"),
+  "JACKSON CALIF": X("Jackson Blvd", "California Ave"),
+  "JACKSON CANAL": X("Jackson Blvd", "Canal St"),
+  "VBUREN RACINE": X("Van Buren St", "Racine Ave"),
+
+  // ---- Grand / Navy Pier (124) and Museum Campus (130) ----
+  "MADISN CLINTN": X("Madison St", "Clinton St"),
+  "MADISON CANAL": X("Madison St", "Canal St"),
+  "MADISON STATE": X("Madison St", "State St"),
+  "NAVY PIER": PLACE("landmark", "Navy Pier", "Navy Pier, 600 E Grand Ave, Chicago, IL"),
+  "ADAMS STATE": X("Adams St", "State St"),
+  "WASHGTN CLINTN": X("Washington Blvd", "Clinton St"),
+
+  // ---- Museum of Science & Industry (10) ----
+  "11th COLUMBUS": PLACE("intersection", "Columbus Dr at 11th St (1100 S, pedestrian underpass)", "1100 S Columbus Dr, Chicago, IL"),
+  "57 STONY ISL": X("57th St", "Stony Island Ave"),
+  "57th MUSEUM": PLACE("landmark", "Museum of Science and Industry", "Museum of Science and Industry, 5700 S DuSable Lake Shore Dr, Chicago, IL"),
+  "60 STONY ISL": X("60th St", "Stony Island Ave"),
+  "63 STONY ISL 2": X("63rd St", "Stony Island Ave", "Chicago",
+    { note: "A second 63rd & Stony Island time point (\"2\" on the paddle)", review: true }),
+  "CHGO MICHIGAN": X("Chicago Ave", "Michigan Ave"),
+  "CHSTNT VdROHE": X("Chestnut St", "Mies van der Rohe Way"),
+  "VnBUREN STATE": X("Van Buren St", "State St"),
+
+  // ---- Train stations (Kedzie routes) ----
+  "35th RED LINE": STA("Sox-35th", "Red Line"),
+  "54th PINK L": STA("54th/Cermak", "Pink Line", "Cicero"),
+  "KEDZIE ORG L": STA("Kedzie", "Orange Line"),
+
+  // ===================== Other garages (weekday) =====================
+  "100th EWING": X("100th St", "Ewing Ave"),
+  "118th PLAZA": PLACE("intersection", "118th St & Lake Point Plaza (3600 E)", "3600 E 118th St, Chicago, IL"),
+  "ARCHER HALSTD": X("Archer Ave", "Halsted St"),
+  "BYN MWR HARLM": X("Bryn Mawr Ave", "Harlem Ave"),
+  "WALTON DEARBN": X("Walton St", "Dearborn St"),
+  "OGILVIE METRA": PLACE("station", "Ogilvie Transportation Center (Metra)", "Ogilvie Transportation Center, 500 W Madison St, Chicago, IL"),
+  "FRD CTY LAYOVER": PLACE("landmark", "Ford City layover", "Ford City Mall, 7601 S Cicero Ave, Chicago, IL", "Chicago",
+    { note: "Bus layover at Ford City (deadheads only); placed at the Ford City bus terminal" }),
+  "STRGE NAVY PR": PLACE("landmark", "Bus storage at Navy Pier", "Navy Pier, 600 E Grand Ave, Chicago, IL", "Chicago",
+    { note: "Placed at the Navy Pier bus terminal" }),
+  "95th BEVERLY": X("95th St", "Beverly Ave"),
+  "RAVNWOD METRA": PLACE("station", "Ravenswood (Metra)", "Ravenswood Metra station, Lawrence Ave & Ravenswood Ave, Chicago, IL"),
+  "63rd ST BEACH": PLACE("landmark", "63rd Street Beach", "63rd Street Beach, 6300 S DuSable Lake Shore Dr, Chicago, IL"),
+  "GRAND BLV PLZ": PLACE("landmark", "Grand Boulevard Plaza", "Grand Boulevard Plaza, Chicago, IL"),
+  "57 HYDE PARK": PLACE("intersection", "57th St & Hyde Park Blvd (at Stony Island)", "57th St & Stony Island Ave, Chicago, IL", "Chicago",
+    { note: "Placed from your plus code, about 200 m NNW of the 57th & Stony Island stops" }),
+  "DIVRSY LAKSHR": X("Diversey Pkwy", "DuSable Lake Shore Dr"),
+  "BYN MWR ELSTN": X("Bryn Mawr Ave", "Elston Ave"),
+  "CHGO LAKESHOR": X("Chicago Ave", "DuSable Lake Shore Dr"),
+  "5th Av PULASK": X("5th Ave", "Pulaski Rd"),
+  "54th S SHORE": X("54th St", "South Shore Dr"),
+  "BRANRD BUFALO": X("Brainard Ave", "Buffalo Ave"),
+  "MONTRSE BEACH": PLACE("landmark", "Montrose Beach", "Montrose Beach, 4400 N Simonds Dr, Chicago, IL"),
+  "STRGE HICKORY": PLACE("landmark", "Bus storage on Hickory Ave (Goose Island)", "Hickory Ave & Division St, Chicago, IL"),
+
+  // ---- CTA facilities ----
+  "103rd GARAGE": PLACE("garage", "103rd Garage", "1702 E 103rd St, Chicago, IL", "Chicago",
+    { note: "Placed at CTA's 103rd Street & Stony Island Garage Terminal stops" }),
+  "74th GARAGE": PLACE("garage", "74th Garage", "1815 W 74th St, Chicago, IL"),
+  "77th GARAGE": PLACE("garage", "77th Garage", "210 W 79th St, Chicago, IL", "Chicago",
+    { note: "Same plus code as CTA South Shops (shares the site)" }),
+  "CHGO GARAGE": PLACE("garage", "Chicago Garage", "Chicago Garage, Chicago Ave, Chicago, IL"),
+  "F GLEN GARAGE": PLACE("garage", "Forest Glen Garage", "5419 W Bryn Mawr Ave, Chicago, IL"),
+  "KEDZIE GARAGE": PLACE("garage", "Kedzie Garage", "358 S Kedzie Ave, Chicago, IL"),
+  "N PARK GARAGE": PLACE("garage", "North Park Garage", "3112 W Foster Ave, Chicago, IL"),
+  "SOUTH SHOPS": PLACE("garage", "CTA South Shops", "210 W 79th St, Chicago, IL"),
+};
+
+// ---------- Coordinates ----------
+// From CTA's GTFS stops.txt: the average position of all CTA stops at that intersection or station
+// (one per direction/corner), and their stop IDs. Locations not listed here have no matching CTA
+// stop; their lat/lon are null, and their "query" text can be sent to a geocoder (e.g. ArcGIS).
+const COORDS = {
+  "26th WESTERN": { lat: 41.845072, lon: -87.685463, gtfsStopIds: ["8257", "8356"] },
+  "35th ORANGE L": { lat: 41.829353, lon: -87.680622, gtfsStopIds: ["40120"] },
+  "59th WESTERN": { lat: 41.78653, lon: -87.6838, gtfsStopIds: ["14578", "14795", "15459", "15460"] },
+  "69th WESTERN": { lat: 41.768279, lon: -87.683402, gtfsStopIds: ["8297", "8317", "10117"] },
+  "79th WESTERN": { lat: 41.750515, lon: -87.682614, gtfsStopIds: ["2669", "2670", "8307", "8630", "15685"] },
+  "ADAMS CANAL": { lat: 41.879366, lon: -87.639407, gtfsStopIds: ["12713"] },
+  "ADAMS WACKER": { lat: 41.87947, lon: -87.636775, gtfsStopIds: ["1108", "16038"] },
+  "ADD CAMPBELL": { lat: 41.946736, lon: -87.690766, gtfsStopIds: ["12525", "12571"] },
+  "ADDISN ASHLND": { lat: 41.947014, lon: -87.668863, gtfsStopIds: ["12536", "12560", "14894", "17252"] },
+  "ADDISN AUSTIN": { lat: 41.94578, lon: -87.776583, gtfsStopIds: ["9569", "9661", "12491", "17222"] },
+  "ADDISN CENTRL": { lat: 41.945884, lon: -87.766815, gtfsStopIds: ["11534", "11616", "17405", "17831"] },
+  "ADDISN CICERO": { lat: 41.946134, lon: -87.747084, gtfsStopIds: ["10208", "10329", "17146", "17147"] },
+  "ADDISN CUMBER": { lat: 41.944446, lon: -87.835499, gtfsStopIds: ["12462"] },
+  "ADDISN HARLEM": { lat: 41.945271, lon: -87.807044, gtfsStopIds: ["11779", "11807", "17357", "17358"] },
+  "ADDISN KEDZIE": { lat: 41.946642, lon: -87.707643, gtfsStopIds: ["12519", "12578"] },
+  "ADDISN LAKSHR": { lat: 41.948646, lon: -87.643562, gtfsStopIds: ["1063", "1162", "12548", "12549"] },
+  "ADDISN MILWKE": { lat: 41.94635, lon: -87.735562, gtfsStopIds: ["5450", "12508", "12590", "15016"] },
+  "ADDISN PULASK": { lat: 41.946389, lon: -87.727292, gtfsStopIds: ["12586", "16174", "17461", "17462"] },
+  "ADDISN WESTRN": { lat: 41.946616, lon: -87.688257, gtfsStopIds: ["8195", "8417", "12527", "12569"] },
+  "ADDISON MILWAUKEE": { lat: 41.94635, lon: -87.735562, gtfsStopIds: ["5450", "12508", "12590", "15016"] },
+  "ARCHER WESTRN": { lat: 41.825965, lon: -87.684724, gtfsStopIds: ["4429", "4489", "7705", "7779", "14580", "16085"] },
+  "ARTHUR CLARK": { lat: 42.00013, lon: -87.671171, gtfsStopIds: ["1791", "1957", "14176"] },
+  "ASHLAND FOSTER": { lat: 41.97626, lon: -87.669627, gtfsStopIds: ["4790", "4801", "8618", "8620"] },
+  "BELMNT HALSTD": { lat: 41.939984, lon: -87.649109, gtfsStopIds: ["4998", "5966", "14150", "14906"] },
+  "BELMNT KIMBAL": { lat: 41.939129, lon: -87.712384, gtfsStopIds: ["7858", "7947", "11139", "11271", "18394"] },
+  "BELMNT SHERDN": { lat: 41.940091, lon: -87.639733, gtfsStopIds: ["1154", "4993", "9291"] },
+  "BELMNT WESTRN": { lat: 41.939445, lon: -87.68806, gtfsStopIds: ["7937", "17342", "17346", "18331"] },
+  "BELMONT CALIF": { lat: 41.939503, lon: -87.697733, gtfsStopIds: ["2996", "7865", "7941", "17474"] },
+  "BERWYN RED L": { lat: 41.977984, lon: -87.658668, gtfsStopIds: ["40340"] },
+  "BERWYN WESTRN": { lat: 41.978089, lon: -87.689339, gtfsStopIds: ["1715", "14182", "14529", "16122"] },
+  "BITTERSWET MD": { lat: 41.955724, lon: -87.645512, gtfsStopIds: ["4864", "4889"] },
+  "BRCHWD WESTRN": { lat: 42.017797, lon: -87.689935, gtfsStopIds: ["1690", "1691"] },
+  "BRIAR SHERIDN": { lat: 41.93864, lon: -87.639504, gtfsStopIds: ["1072", "1153"] },
+  "BYN MWR SHRDN": { lat: 41.983655, lon: -87.655317, gtfsStopIds: ["1038", "1188", "11470", "11471"] },
+  "CARMEN KIMBAL": { lat: 41.973332, lon: -87.713486, gtfsStopIds: ["11124", "11125", "11285", "11286"] },
+  "CATALPA KEDZE": { lat: 41.980601, lon: -87.708782, gtfsStopIds: ["14876"] },
+  "CENTRL COWPER": { lat: 42.064518, lon: -87.724054, gtfsStopIds: ["17910"] },
+  "CENTRL CRWFRD": { lat: 42.064551, lon: -87.727338, gtfsStopIds: ["12701", "12702"] },
+  "CERMAK DAMEN": { lat: 41.852246, lon: -87.675842, gtfsStopIds: ["8888", "14069", "14489", "18443"] },
+  "CHICAGO DAMEN": { lat: 41.895925, lon: -87.677146, gtfsStopIds: ["552", "8858", "8920", "14519"] },
+  "CHICAGO HOMAN": { lat: 41.895507, lon: -87.711438, gtfsStopIds: ["14517", "14587", "18175", "18176"] },
+  "CHICAGO STATE": { lat: 41.896691, lon: -87.628091, gtfsStopIds: ["601", "14460", "18223", "18613"] },
+  "CHURCH BENSON": { lat: 42.048456, lon: -87.683499, gtfsStopIds: ["12708"] },
+  "CHURCH DODGE": { lat: 42.048332, lon: -87.698867, gtfsStopIds: ["12711", "13135", "13156"] },
+  "CLARK HALSTED": { lat: 41.938143, lon: -87.649211, gtfsStopIds: ["14437", "14895", "14908", "14911"] },
+  "CNTRL GRN BAY": { lat: 42.064334, lon: -87.699338, gtfsStopIds: ["12642", "18839"] },
+  "CONGRES HOMAN": { lat: 41.874621, lon: -87.710704, gtfsStopIds: ["230", "11179"] },
+  "CONGRES PLAZA": { lat: 41.874866, lon: -87.623557, gtfsStopIds: ["74"] },
+  "CRTLND WESTRN": { lat: 41.915802, lon: -87.687481, gtfsStopIds: ["8214"] },
+  "DAVIS BENSON": { lat: 42.047102, lon: -87.683333, gtfsStopIds: ["14405"] },
+  "DAVIS PURPL L": { lat: 42.04771, lon: -87.683543, gtfsStopIds: ["40050"] },
+  "DELAWARE MICH": { lat: 41.899398, lon: -87.624131, gtfsStopIds: ["1097", "1128"] },
+  "DEMPSTR YEL L": { lat: 42.038951, lon: -87.751919, gtfsStopIds: ["40140"] },
+  "DEVON BROADWY": { lat: 41.998138, lon: -87.660231, gtfsStopIds: ["1029"] },
+  "DEVON CALIFNA": { lat: 41.997567, lon: -87.699743, gtfsStopIds: ["1725", "11877", "11909", "17199"] },
+  "DEVON CLARK": { lat: 41.998073, lon: -87.670442, gtfsStopIds: ["1739", "1762", "1792", "1956"] },
+  "DEVON KEDZIE": { lat: 41.997643, lon: -87.709367, gtfsStopIds: ["1354", "1721", "1779", "12031", "12089", "14153", "15001"] },
+  "DEVON WESTERN": { lat: 41.997723, lon: -87.689887, gtfsStopIds: ["1729", "1771", "18308", "18309"] },
+  "DIVERSY CLARK": { lat: 41.932846, lon: -87.645107, gtfsStopIds: ["1917", "11040", "18173", "18329"] },
+  "DIVERSY DAMEN": { lat: 41.932226, lon: -87.678155, gtfsStopIds: ["8839", "8938", "11018", "11055"] },
+  "DIVISN ASHLND": { lat: 41.903555, lon: -87.667498, gtfsStopIds: ["2014", "2059", "5537", "6024"] },
+  "DIVISN WESTRN": { lat: 41.902896, lon: -87.687042, gtfsStopIds: ["8391", "14569", "14596", "18762"] },
+  "DIVISON CLARK": { lat: 41.903924, lon: -87.631433, gtfsStopIds: ["1850", "1899", "2038", "5370", "5395"] },
+  "EMERSON DODGE": { lat: 42.051988, lon: -87.698884, gtfsStopIds: ["12697", "15543"] },
+  "EVANSTON H.S.": { lat: 42.045483, lon: -87.699162, gtfsStopIds: ["14729"] },
+  "FOSTER ALBANY": { lat: 41.975762, lon: -87.705936, gtfsStopIds: ["4774"] },
+  "FOSTER BRDWAY": { lat: 41.976465, lon: -87.659787, gtfsStopIds: ["4794", "4797", "18010"] },
+  "FOSTER CALIF": { lat: 41.975911, lon: -87.698849, gtfsStopIds: ["4814", "11890", "11897", "15381"] },
+  "FOSTER CLARK": { lat: 41.976197, lon: -87.668423, gtfsStopIds: ["1806", "1942", "4791", "4800"] },
+  "FOSTER DAMEN": { lat: 41.975966, lon: -87.679554, gtfsStopIds: ["4785", "8619", "8961", "17582"] },
+  "FOSTER KEDZIE": { lat: 41.975634, lon: -87.708677, gtfsStopIds: ["4773", "4818", "11896", "17501"] },
+  "FOSTER KIMBALL": { lat: 41.975597, lon: -87.713454, gtfsStopIds: ["4820", "11123", "11287", "17496"] },
+  "FOSTER LINCON": { lat: 41.975883, lon: -87.692344, gtfsStopIds: ["4811", "14965", "17584", "17585"] },
+  "FOSTER MARINE": { lat: 41.976444, lon: -87.65242, gtfsStopIds: ["4846", "4847"] },
+  "FOSTER SHERDN": { lat: 41.976414, lon: -87.655021, gtfsStopIds: ["1042", "1184", "4845", "4901"] },
+  "FOSTER WESTRN": { lat: 41.975906, lon: -87.689295, gtfsStopIds: ["4781", "14527", "17583", "18311"] },
+  "FULLERTON STK": { lat: 41.925527, lon: -87.636021, gtfsStopIds: ["1081", "1144"] },
+  "FULRTN KIMBAL": { lat: 41.924678, lon: -87.712095, gtfsStopIds: ["1250", "1322", "17519", "17628"] },
+  "GRACE LAKESHR": { lat: 41.952166, lon: -87.645028, gtfsStopIds: ["1061", "4886"] },
+  "GRAND HALSTED": { lat: 41.891209, lon: -87.647853, gtfsStopIds: ["738", "5502", "15341", "18786"] },
+  "HARISN WESTRN": { lat: 41.873815, lon: -87.686395, gtfsStopIds: ["188", "8373", "14769", "18130"] },
+  "HARISON CLARK": { lat: 41.874454, lon: -87.630702, gtfsStopIds: ["1873", "5384", "15895"] },
+  "HARISON STATE": { lat: 41.874948, lon: -87.62758, gtfsStopIds: ["1431", "15052"] },
+  "HOWARD ASBURY": { lat: 42.019607, lon: -87.689991, gtfsStopIds: ["3519"] },
+  "HOWARD CALIF": { lat: 42.019333, lon: -87.699488, gtfsStopIds: ["3523", "3622", "14732", "14739"] },
+  "HOWARD L": { lat: 42.019063, lon: -87.672892, gtfsStopIds: ["40900"] },
+  "HOWARD McCRMK": { lat: 42.018956, lon: -87.711024, gtfsStopIds: ["11859"] },
+  "IRVING CALIF": { lat: 41.953852, lon: -87.698138, gtfsStopIds: ["5695", "14551", "18812", "18820"] },
+  "IRVING CLARK": { lat: 41.954419, lon: -87.662253, gtfsStopIds: ["5668", "5678", "6281", "18688"] },
+  "IRVING DAMEN": { lat: 41.954171, lon: -87.678748, gtfsStopIds: ["5660", "5687", "8827", "8951"] },
+  "IRVING SHERDN": { lat: 41.954488, lon: -87.654536, gtfsStopIds: ["1056", "1170", "5670", "5676"] },
+  "JACKSN FRNKLN": { lat: 41.877991, lon: -87.635261, gtfsStopIds: ["68", "6711"] },
+  "JACKSON DAMEN": { lat: 41.877389, lon: -87.676627, gtfsStopIds: ["42", "111", "4717", "15449"] },
+  "JACKSON HOMAN": { lat: 41.877301, lon: -87.710892, gtfsStopIds: ["126", "11177", "11233", "14979"] },
+  "KINZIE CLARK": { lat: 41.888702, lon: -87.631142, gtfsStopIds: ["18769"] },
+  "LAKE STATE": { lat: 41.885609, lon: -87.627829, gtfsStopIds: ["1438"] },
+  "LAWRNC KEDZIE": { lat: 41.968567, lon: -87.708473, gtfsStopIds: ["3748", "3802", "11892", "17500"] },
+  "LAWRNC KIMBAL": { lat: 41.96831, lon: -87.713243, gtfsStopIds: ["3746", "3804", "11127", "11283"] },
+  "LAWRNC WESTRN": { lat: 41.968623, lon: -87.688923, gtfsStopIds: ["3756", "3794", "14591", "14592"] },
+  "LINCOLN CALIF": { lat: 41.985627, lon: -87.699367, gtfsStopIds: ["1363", "11884", "11902", "15227"] },
+  "LINCOLNWD CTR": { lat: 42.01124, lon: -87.714511, gtfsStopIds: ["18859", "18860"] },
+  "LOGAN SQ L": { lat: 41.929534, lon: -87.707688, gtfsStopIds: ["41020"] },
+  "LUNT WESTERN": { lat: 42.008631, lon: -87.690009, gtfsStopIds: ["1684", "1698", "12047", "12073"] },
+  "LaSALLE CLARK": { lat: 41.913321, lon: -87.632961, gtfsStopIds: ["1451", "1845"] },
+  "LaSALLE METRA": { lat: 41.875382, lon: -87.633025, gtfsStopIds: ["17578"] },
+  "MAIN CHICAGO": { lat: 42.034034, lon: -87.679449, gtfsStopIds: ["12703"] },
+  "MNTRSE MARINE": { lat: 41.962063, lon: -87.647003, gtfsStopIds: ["4860", "11363", "17766"] },
+  "MORSE RED L": { lat: 42.008362, lon: -87.665909, gtfsStopIds: ["40100"] },
+  "NORTH DAMEN": { lat: 41.910414, lon: -87.677743, gtfsStopIds: ["898", "945", "5481", "8849", "8929", "15847"] },
+  "NORTH KIMBALL": { lat: 41.910108, lon: -87.711912, gtfsStopIds: ["11156", "14831", "14832"] },
+  "OAKTON SKOKIE": { lat: 42.026212, lon: -87.746704, gtfsStopIds: ["3598", "10438", "10462"] },
+  "PLANETARIUM": { lat: 41.866153, lon: -87.607859, gtfsStopIds: ["4877"] },
+  "RANDLPH STATE": { lat: 41.884359, lon: -87.627797, gtfsStopIds: ["1437"] },
+  "RNDLPH COLMBS": { lat: 41.884583, lon: -87.620615, gtfsStopIds: ["2530", "6353", "6359", "8613"] },
+  "RNDLPH MICHGN": { lat: 41.8847, lon: -87.62419, gtfsStopIds: ["1105", "1119", "14482"] },
+  "ROOSEVELT L": { lat: 41.867379, lon: -87.627031, gtfsStopIds: ["41400"] },
+  "ROSEVLT HOMAN": { lat: 41.866315, lon: -87.710401, gtfsStopIds: ["358", "11225", "15674", "17636"] },
+  "S WATER MICH": { lat: 41.886924, lon: -87.624486, gtfsStopIds: ["1104", "1120", "18791"] },
+  "SHERDN LAKSHR": { lat: 41.953029, lon: -87.645092, gtfsStopIds: ["1164", "4866", "4887"] },
+  "THRNDLE CALIF": { lat: 41.988573, lon: -87.699338, gtfsStopIds: ["11882", "11904"] },
+  "TOUHY CALIFNA": { lat: 42.012066, lon: -87.69982, gtfsStopIds: ["11869", "11917", "12042", "12078"] },
+  "UNION STATION": { lat: 41.877754, lon: -87.639872, gtfsStopIds: ["18250", "18251", "18252"] },
+  "WACKER COLUMBUS": { lat: 41.887712, lon: -87.620818, gtfsStopIds: ["3954", "5509", "5515", "14222"] },
+  "WACKR COLUMBS": { lat: 41.887712, lon: -87.620818, gtfsStopIds: ["3954", "5509", "5515", "14222"] },
+  "WACKR LaSALLE": { lat: 41.886351, lon: -87.632468, gtfsStopIds: ["14058", "15904"] },
+  "WACKR MICHIGN": { lat: 41.888205, lon: -87.624583, gtfsStopIds: ["1121", "1421", "6583", "6588", "18510"] },
+  "WASHGTN CANAL": { lat: 41.883321, lon: -87.639926, gtfsStopIds: ["443", "6579"] },
+  "WASHGTN STATE": { lat: 41.883102, lon: -87.628, gtfsStopIds: ["448", "14227", "15854", "18154"] },
+  "WAVELAND BDWY": { lat: 41.949351, lon: -87.648652, gtfsStopIds: ["5360", "5405", "5756", "5757"] },
+  "WAVLND LAKSHR": { lat: 41.950361, lon: -87.644524, gtfsStopIds: ["1062", "1163"] },
+  "WESTERN BRN L": { lat: 41.966163, lon: -87.688502, gtfsStopIds: ["41480"] },
+  "WILSON CLRNDN": { lat: 41.965603, lon: -87.650066, gtfsStopIds: ["4917", "14469", "17718"] },
+  "WILSON MARINE": { lat: 41.965575, lon: -87.648684, gtfsStopIds: ["3773", "4859", "11362"] },
+
+  // ---- Kedzie garage routes (matched to stops served by the route that uses them) ----
+  "15 pl INDIANA": { lat: 41.861258, lon: -87.622547, gtfsStopIds: ["15278"] },
+  "16th CICERO": { lat: 41.858461, lon: -87.744502, gtfsStopIds: ["10277", "14219"] },
+  "16th KEDZIE": { lat: 41.859097, lon: -87.705292, gtfsStopIds: ["6829", "14835"] },
+  "16th PULASKI": { lat: 41.858873, lon: -87.724957, gtfsStopIds: ["6741", "6837"] },
+  "18th DAMEN": { lat: 41.857671, lon: -87.67576, gtfsStopIds: ["6819", "14834"] },
+  "18th HALSTED": { lat: 41.858167, lon: -87.646774, gtfsStopIds: ["6805"] },
+  "24 pl CICERO": { lat: 41.846587, lon: -87.744316, gtfsStopIds: ["6301", "10269", "18365", "18370"] },
+  "26th KEDZIE": { lat: 41.844585, lon: -87.705028, gtfsStopIds: ["3060", "14969", "14970", "17449"] },
+  "26th PULASKI": { lat: 41.844263, lon: -87.724769, gtfsStopIds: ["6308", "14848"] },
+  "31st KEDZIE": { lat: 41.837116, lon: -87.704975, gtfsStopIds: ["17448", "17696"] },
+  "31st KOMENSKY": { lat: 41.836762, lon: -87.725504, gtfsStopIds: ["12831"] },
+  "35 COTTAGE GR": { lat: 41.83133, lon: -87.61183, gtfsStopIds: ["7629"] },
+  "35th ASHLAND": { lat: 41.83051, lon: -87.665301, gtfsStopIds: ["7652", "18204"] },
+  "35th RED LINE": { lat: 41.831191, lon: -87.630636, gtfsStopIds: ["40190"] },
+  "36th KEDZIE": { lat: 41.828208, lon: -87.704568, gtfsStopIds: ["7808", "7809", "15183"] },
+  "54th PINK L": { lat: 41.851773, lon: -87.756692, gtfsStopIds: ["40580"] },
+  "57 STONY ISL": { lat: 41.791285, lon: -87.586708, gtfsStopIds: ["1515", "1656"] },
+  "57th MUSEUM": { lat: 41.791674, lon: -87.583538, gtfsStopIds: ["10565"] },
+  "60 STONY ISL": { lat: 41.785936, lon: -87.58659, gtfsStopIds: ["1512", "1659"] },
+  "63 STONY ISL 2": { lat: 41.780426, lon: -87.586541, gtfsStopIds: ["1509", "3205", "3453", "5201"] },
+  "63 pl KEDZIE": { lat: 41.778333, lon: -87.703351, gtfsStopIds: ["3099"] },
+  "ADAMS STATE": { lat: 41.879463, lon: -87.627863, gtfsStopIds: ["1115", "4732"] },
+  "ARCHER KEDZIE": { lat: 41.814176, lon: -87.704222, gtfsStopIds: ["14503", "17338"] },
+  "BL ISL WESTRN": { lat: 41.844981, lon: -87.68506, gtfsStopIds: ["6323", "6389"] },
+  "CERMAK 54th": { lat: 41.850965, lon: -87.759211, gtfsStopIds: ["6900"] },
+  "CERMAK ASHLND": { lat: 41.852345, lon: -87.66613, gtfsStopIds: ["6862", "6937"] },
+  "CERMAK CEN PK": { lat: 41.851512, lon: -87.714999, gtfsStopIds: ["11215", "18289"] },
+  "CERMAK CICERO": { lat: 41.851411, lon: -87.744544, gtfsStopIds: ["14892"] },
+  "CERMAK HALSTD": { lat: 41.852643, lon: -87.646985, gtfsStopIds: ["6947", "16193"] },
+  "CERMAK KEDZIE": { lat: 41.851779, lon: -87.705265, gtfsStopIds: ["17189", "17205", "17415", "17416"] },
+  "CERMAK PULASK": { lat: 41.851559, lon: -87.725095, gtfsStopIds: ["6665", "14845"] },
+  "CERMAK RDGLND": { lat: 41.850734, lon: -87.783781, gtfsStopIds: ["6960", "6977"] },
+  "CERMAK STATE": { lat: 41.852566, lon: -87.627084, gtfsStopIds: ["2343", "2386"] },
+  "CERMAK WESTRN": { lat: 41.852038, lon: -87.685847, gtfsStopIds: ["15305", "18445"] },
+  "CHGO MICHIGAN": { lat: 41.896543, lon: -87.624139, gtfsStopIds: ["1126"] },
+  "CHSTNT VdROHE": { lat: 41.898468, lon: -87.622679, gtfsStopIds: ["5019"] },
+  "HARBOR POINT": { lat: 41.884841, lon: -87.615377, gtfsStopIds: ["6355", "15416"] },
+  "HARISN ASHLND": { lat: 41.874093, lon: -87.6668, gtfsStopIds: ["193", "6043", "6233", "18334"] },
+  "HARISN CENTRL": { lat: 41.872574, lon: -87.764808, gtfsStopIds: ["11575"] },
+  "HARISN HALSTD": { lat: 41.874364, lon: -87.647621, gtfsStopIds: ["206", "6347"] },
+  "JACKSN AUSTIN": { lat: 41.87633, lon: -87.774111, gtfsStopIds: ["1"] },
+  "JACKSN CICERO": { lat: 41.876819, lon: -87.745131, gtfsStopIds: ["14", "140"] },
+  "JACKSN CLINTN": { lat: 41.878148, lon: -87.641157, gtfsStopIds: ["6361"] },
+  "JACKSN KEDZIE": { lat: 41.877334, lon: -87.706032, gtfsStopIds: ["30", "124"] },
+  "JACKSN PULASK": { lat: 41.877096, lon: -87.725568, gtfsStopIds: ["23", "131"] },
+  "JACKSN RACINE": { lat: 41.877737, lon: -87.656785, gtfsStopIds: ["59"] },
+  "JACKSN WESTRN": { lat: 41.877558, lon: -87.686329, gtfsStopIds: ["38", "15860"] },
+  "JACKSON CALIF": { lat: 41.877441, lon: -87.696225, gtfsStopIds: ["34", "120"] },
+  "JACKSON CANAL": { lat: 41.878005, lon: -87.639782, gtfsStopIds: ["67"] },
+  "KEDZIE ORG L": { lat: 41.804236, lon: -87.704406, gtfsStopIds: ["41150"] },
+  "MADISN CLINTN": { lat: 41.881747, lon: -87.641286, gtfsStopIds: ["18125"] },
+  "MADISON CANAL": { lat: 41.881945, lon: -87.63903, gtfsStopIds: ["5006"] },
+  "MADISON STATE": { lat: 41.881933, lon: -87.627681, gtfsStopIds: ["1117"] },
+  "N RIVERSIDE": { lat: 41.848076, lon: -87.809317, gtfsStopIds: ["6968"] },
+  "NAVY PIER": { lat: 41.892306, lon: -87.610001, gtfsStopIds: ["14161"] },
+  "OGDEN CALIFNA": { lat: 41.861241, lon: -87.695995, gtfsStopIds: ["6676", "14980"] },
+  "ROSVLT ASHLND": { lat: 41.866855, lon: -87.666306, gtfsStopIds: ["14976", "18395"] },
+  "ROSVLT CICERO": { lat: 41.865908, lon: -87.744812, gtfsStopIds: ["17425", "17441"] },
+  "ROSVLT HALSTD": { lat: 41.867169, lon: -87.646895, gtfsStopIds: ["14459", "17396"] },
+  "ROSVLT KEDZIE": { lat: 41.866456, lon: -87.705552, gtfsStopIds: ["356", "14955", "17632", "18506"] },
+  "ROSVLT MICHGN": { lat: 41.867901, lon: -87.62397, gtfsStopIds: ["1580"] },
+  "ROSVLT PULASK": { lat: 41.866176, lon: -87.724981, gtfsStopIds: ["365", "14954"] },
+  "ROSVLT RACINE": { lat: 41.867034, lon: -87.656689, gtfsStopIds: ["15403", "15404"] },
+  "ROSVLT WESTRN": { lat: 41.866622, lon: -87.68579, gtfsStopIds: ["348", "15983"] },
+  "VBUREN KEDZIE": { lat: 41.875881, lon: -87.705957, gtfsStopIds: ["3040", "3158"] },
+  "VBUREN RACINE": { lat: 41.876584, lon: -87.656809, gtfsStopIds: ["93"] },
+  "VnBUREN STATE": { lat: 41.876928, lon: -87.627659, gtfsStopIds: ["1113", "1430"] },
+  "WASHGTN CLINTN": { lat: 41.883322, lon: -87.641319, gtfsStopIds: ["5023"] },
+  "11th COLUMBUS": { lat: 41.869368, lon: -87.620511, gtfsStopIds: ["4872", "14483"] },
+
+  // ---- Other garages (weekday) ----
+  "103rd GARAGE": { lat: 41.708550, lon: -87.581011, gtfsStopIds: ["14155", "14156", "17747"] },
+  "118th PLAZA": { lat: 41.681935, lon: -87.537408, gtfsStopIds: ["7291"] },
+  "FRD CTY LAYOVER": { lat: 41.755867, lon: -87.733027, gtfsStopIds: ["18294", "18295", "18782"] },
+  "STRGE NAVY PR": { lat: 41.892482, lon: -87.610363, gtfsStopIds: ["758", "14161", "14162", "18620"] },
+};
+
+// Not CTA stops: placed from neighboring CTA stops on the same streets, or from a map location you gave.
+const ESTIMATED = {
+  "49th WESTERN": { lat: 41.80488, lon: -87.68432, how: "halfway between the Western & 47th and Western & 51st stops" },
+  "KINZIE DEARBN": { lat: 41.88892, lon: -87.62949, how: "Kinzie line from Clark & Kinzie / State & Kinzie stops, Dearborn line from Dearborn stops" },
+  "IdaBWls FRKLN": { lat: 41.87538, lon: -87.63526, how: "Franklin line from Franklin stops, Ida B Wells line from the LaSalle St Station stop" },
+  "ASHLAND CLARK": { lat: 41.98595, lon: -87.66943, how: "at the Clark & Edgewater stops, beside 1559 W Edgewater" },
+  "RECREATION DR": { lat: 41.951188, lon: -87.643938, how: "from Google plus code 86HJX924+FC (X924+FC Chicago)" },
+  "N PARK GARAGE": { lat: 41.976062, lon: -87.706937, how: "from Google plus code 86HJX7GV+C6 (X7GV+C6 Chicago)" },
+  "OLD ORCHARD": { lat: 42.059437, lon: -87.750312, how: "from Google plus code 86JJ365X+QV (365X+QV Skokie)" },
+  "SOUTH SHOPS": { lat: 41.750937, lon: -87.629938, how: "from Google plus code 86HJQ92C+92 (Q92C+92 Chicago)" },
+  "IRVING LAKSHR": { lat: 41.95462, lon: -87.6419, how: "approximate: ~300 m east of the Irving Park & Marine Drive stops, at the Lake Shore Dr ramps" },
+  "WILSON LAKSHR": { lat: 41.96558, lon: -87.6451, how: "approximate: ~300 m east of the Wilson & Marine Drive stops, at the Lake Shore Dr ramps" },
+  // Kedzie garage routes
+  "24 pl KING DR": { lat: 41.8482, lon: -87.6177, how: "King Dr line from the King & 25th / 26th & King stops, between 24th St and the 25th St stops" },
+  "25th INDIANA": { lat: 41.84738, lon: -87.62214, how: "25th St line from the 25th & Michigan / King & 25th stops, Indiana line from the 26th & Indiana stop" },
+  "ADAMS CLINTON": { lat: 41.87943, lon: -87.64116, how: "Adams line from the Adams & Wacker / Adams & Wells stops, Clinton line from the Clinton & Jackson stop" },
+  "CHICAGO TROY": { lat: 41.89552, lon: -87.70522, how: "Chicago Ave line from the Chicago & Kedzie stops, one block (Troy, 3100 W) east of Kedzie" },
+  "31st ST BEACH": { lat: 41.838138, lon: -87.606859, how: "from Google plus code 86HJR9QV+772 (R9QV+772 Chicago), the 31st Street turnaround" },
+  "KEDZIE GARAGE": { lat: 41.876688, lon: -87.707063, how: "from Google plus code 86HJV7GV+M5 (V7GV+M5 Chicago)" },
+  // Other garages (weekday)
+  "100th EWING": { lat: 41.7139, lon: -87.5353, how: "Ewing line from the Ewing stops, halfway between the 99th and 101st St stops" },
+  "ARCHER HALSTD": { lat: 41.8470, lon: -87.6466, how: "on Archer between the Archer & Green and Archer & Lowe stops, where the Halsted stops' line crosses it" },
+  "BYN MWR HARLM": { lat: 41.9835, lon: -87.8069, how: "Harlem line from the Harlem & Talcott / Higgins & Harlem stops, at Bryn Mawr (5600 N)" },
+  "WALTON DEARBN": { lat: 41.8999, lon: -87.6299, how: "Walton line from the Walton & Clark stop, Dearborn line from the Dearborn & Maple stop" },
+  "OGILVIE METRA": { lat: 41.8826, lon: -87.6404, how: "Ogilvie Transportation Center, between the Madison & Canal and Clinton & Madison stops" },
+  "74th GARAGE": { lat: 41.759187, lon: -87.670563, how: "from Google plus code 86HJQ85H+MQ (Q85H+MQ Chicago)" },
+  "77th GARAGE": { lat: 41.750937, lon: -87.629938, how: "from Google plus code 86HJQ92C+92 (Q92C+92 Chicago)" },
+  "CHGO GARAGE": { lat: 41.892312, lon: -87.729188, how: "from Google plus code 86HJV7RC+W8 (V7RC+W8 Chicago)" },
+  "F GLEN GARAGE": { lat: 41.984187, lon: -87.764437, how: "from Google plus code 86HJX6MP+M6 (X6MP+M6 Chicago)" },
+  "95th BEVERLY": { lat: 41.721188, lon: -87.667313, how: "from Google plus code 86HJP8CM+F3 (P8CM+F3 Chicago)" },
+  "RAVNWOD METRA": { lat: 41.968688, lon: -87.673687, how: "from Google plus code 86HJX89G+FG (X89G+FG Chicago)" },
+  "63rd ST BEACH": { lat: 41.780062, lon: -87.575187, how: "from Google plus code 86HJQCJF+2W (QCJF+2W Chicago)" },
+  "GRAND BLV PLZ": { lat: 41.796188, lon: -87.630563, how: "from Google plus code 86HJQ9W9+FQ (Q9W9+FQ Chicago)" },
+  "57 HYDE PARK": { lat: 41.792937, lon: -87.587687, how: "from Google plus code 86HJQCV6+5W (QCV6+5W Chicago)" },
+  "DIVRSY LAKSHR": { lat: 41.932922, lon: -87.636443, how: "from coordinates you gave (41.932922, -87.636443)" },
+  "BYN MWR ELSTN": { lat: 41.982813, lon: -87.764437, how: "from Google plus code 86HJX6MP+46 (X6MP+46 Chicago)" },
+  "CHGO LAKESHOR": { lat: 41.896687, lon: -87.617563, how: "from Google plus code 86HJV9WJ+MX (V9WJ+MX Chicago)" },
+  "5th Av PULASK": { lat: 41.872937, lon: -87.725563, how: "from Google plus code 86HJV7FF+5Q (V7FF+5Q Chicago)" },
+  "54th S SHORE": { lat: 41.796188, lon: -87.581063, how: "from Google plus code 86HJQCW9+FH (QCW9+FH Chicago)" },
+  "BRANRD BUFALO": { lat: 41.646313, lon: -87.543063, how: "from Google plus code 86HJJFW4+GQ (JFW4+GQ Chicago)" },
+  "MONTRSE BEACH": { lat: 41.964857, lon: -87.639137, how: "from coordinates you gave (41.964857, -87.639137)" },
+  "STRGE HICKORY": { lat: 41.902437, lon: -87.650563, how: "from Google plus code 86HJW82X+XQ (W82X+XQ Chicago)" },
+};
+
+for (const [key, loc] of Object.entries(LOCATIONS)) {
+  if (ESTIMATED[key]) {
+    const e = ESTIMATED[key];
+    Object.assign(loc, { lat: e.lat, lon: e.lon, gtfsStopIds: [], coordsFrom: e.how.startsWith("from ") ? e.how : `estimated: ${e.how}` });
+    continue;
+  }
+  const c = COORDS[key];
+  Object.assign(loc, c
+    ? { lat: c.lat, lon: c.lon, gtfsStopIds: c.gtfsStopIds, coordsFrom: "CTA GTFS stops" }
+    : { lat: null, lon: null, gtfsStopIds: [], coordsFrom: "none yet — geocode the query" });
+}
+
+// Time points matched to CTA stops by script (see locations-gtfs.js). A hand-written entry above wins.
+for (const [key, loc] of Object.entries(GTFS_LOCATIONS)) {
+  if (!LOCATIONS[key]) LOCATIONS[key] = { ...loc };
+}
+
+/** Look up a paddle location name. Unknown names return null. */
+export function locationOf(paddleName) {
+  return LOCATIONS[String(paddleName ?? "").trim()] ?? null;
+}
+
+/**
+ * Swap paddle names for readable locations in a run (in place), e.g.
+ *   { time, location: "BELMONT CALIF" }
+ *   -> { time, location: "Belmont Ave & California Ave", type: "intersection", lat: 41.93983, lon: -87.69756 }
+ * Applies to every trip time point, each half's start and end, and relief "headed to" names.
+ * Names not in the table keep their paddle text, with lat/lon null.
+ */
+export function placeLocations(run) {
+  const place = (p) => {
+    if (!p || "lat" in p) return; // already converted
+    const paddleName = p.location;
+    const loc = locationOf(paddleName);
+    const { time, notes } = p;
+    for (const k of Object.keys(p)) delete p[k];
+    Object.assign(p, {
+      time,
+      location: loc?.name ?? paddleName,
+      type: loc?.type ?? null,
+      lat: loc?.lat ?? null,
+      lon: loc?.lon ?? null,
+    });
+    if (notes) p.notes = notes;
+  };
+  const headed = (r) => {
+    if (!r || !r.headedTo) return;
+    const loc = locationOf(r.headedTo);
+    if (loc) r.headedTo = loc.name;
+  };
+  for (const h of run.halves) {
+    place(h.start);
+    place(h.end);
+    headed(h.startRelief);
+    headed(h.relief);
+    for (const t of h.trips) [t.begin, ...t.stops, t.end].forEach(place);
+  }
+  return run;
+}

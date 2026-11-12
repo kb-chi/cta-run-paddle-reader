@@ -1,0 +1,24 @@
+{
+  "name": "run-paddle-reader",
+  "version": "0.1.0",
+  "description": "Reads CTA run paddle PDFs into run objects and saves them as one JSON file.",
+  "type": "module",
+  "main": "run.js",
+  "bin": {
+    "read-paddles": "read-paddles.js"
+  },
+  "scripts": {
+    "read": "node read-paddles.js",
+    "test": "node --test tests/*.test.js",
+    "viz": "node visualizer/serve.js"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "dependencies": {
+    "gifenc": "^1.0.3",
+    "pdfjs-dist": "^6.2.108"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}
