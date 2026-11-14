@@ -7,138 +7,233 @@
 //   e.g. node read-paddles.js North_Park_Saturday.pdf   ->  "North Park Saturday Runs Parsed.json"
 //
 // All the PDFs given must be for the same day type and the same garage; otherwise nothing is saved.
-//
-// The output file looks like:
-//   {
-//     "createdAt": "2026-11-11T16:00:00.000Z",
-//     "garage": "North Park", "day": "Saturday",
-//     "statistics": { "inServiceTrips": 2310, "inServiceTripsByRoute": { "22": 400, ... },
-//                     "pullouts": 277, "swings": 0, "blocks": 7, "pto": 3 },
-//     "sources": [ { "file": "North_Park_Saturday.pdf", "pages": 291, "runs": 291 } ],
-//     "runCount": 291,
-//     "runs": [ { ...run object, plus "source": "North_Park_Saturday.pdf" }, ... ],
-//     "duplicatePages": [ { "source": "...", "page": 76, "sameAsPage": 75, "run": "P227" } ],
-//     "discardedPages": [ { "source": "...", "page": 361, "run": "P811", "keptPage": 360, "reason": "..." } ],
-//     "locations": { "ARTHUR CLARK": { type, name, query, lat, lon, gtfsStopIds, ... }, ... },  (keyed by paddle name)
-//   Durations are "H:MM:SS" text, e.g. "recoveryTime": "1:19:30", "pay": { "total": "8:12:00", ... }.
-//   Every time point in "runs" reads like
-//     { "time": "06:25:00", "location": "Arthur Ave & Clark St", "type": "intersection",
-//       "lat": 42.00013, "lon": -87.671171 }
-//     "problems": [ { "source": "...", "page": 12, "run": "P012", "message": "..." } ]
-//   }
+// The output contains source/run counts, statistics, parsed runs, duplicate/discarded pages, problems,
+// and the locations used by those runs. Durations are written as "H:MM:SS" text.
 
 import fs from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { readPdfPages } from "./pdf-text.js";
 import { parsePaddlePage } from "./paddle-parser.js";
 import { LOCATIONS, placeLocations } from "./locations.js";
 import { durationsAsText, resolveMidRunChanges, runStatistics } from "./run.js";
 
-const args = process.argv.slice(2);
-let outFile = null; // default: "[Garage] [Day] Runs Parsed.json"
-const inputs = [];
-for (let i = 0; i < args.length; i++) {
-  if (args[i] === "-o" || args[i] === "--out") outFile = args[++i];
-  else inputs.push(args[i]);
-}
-if (inputs.length === 0) {
-  console.log("Usage: node read-paddles.js <paddles.pdf> [more.pdf ...] [-o other-name.json]");
-  console.log("All the PDFs must be for one day type (Weekday, Saturday or Sunday) and one garage.");
-  process.exit(1);
+function parseArguments(args) {
+  let outFile = null;
+  const inputs = [];
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "-o" || args[i] === "--out") outFile = args[++i];
+    else inputs.push(args[i]);
+  }
+
+  return { inputs, outFile };
 }
 
-const all = { createdAt: new Date().toISOString(), garage: null, day: null, statistics: null, sources: [], runCount: 0, runs: [], duplicatePages: [], discardedPages: [], problems: [] };
+function createOutput() {
+  return {
+    createdAt: new Date().toISOString(),
+    garage: null,
+    day: null,
+    statistics: null,
+    sources: [],
+    runCount: 0,
+    runs: [],
+    duplicatePages: [],
+    discardedPages: [],
+    problems: [],
+  };
+}
 
-for (const input of inputs) {
-  const name = path.basename(input);
-  process.stdout.write(`Reading ${name} ...`);
+async function readSourcePages(input, name) {
   const data = new Uint8Array(await fs.readFile(input));
   const pages = await readPdfPages(data, (done, total) => {
-    if (done % 25 === 0 || done === total) process.stdout.write(`\rReading ${name} ... page ${done}/${total}`);
+    if (done % 25 === 0 || done === total) {
+      process.stdout.write(`\rReading ${name} ... page ${done}/${total}`);
+    }
   });
-  // 1. Read every page.
-  const parsedPages = [];
-  for (const page of pages) {
-    let parsed;
-    try {
-      parsed = parsePaddlePage(page);
-    } catch (err) {
-      parsed = { run: null, problems: [`Couldn't read this page: ${err.message}`] };
-    }
-    parsedPages.push({ page: page.page, ...parsed });
-  }
-  const sameRun = (a, b) => a.number === b.number && a.day === b.day && a.dayTag === b.dayTag;
 
-  // 2. Keep the runs.
+  return pages.map((page) => {
+    try {
+      return { page: page.page, ...parsePaddlePage(page) };
+    } catch (error) {
+      return { page: page.page, run: null, problems: [`Couldn't read this page: ${error.message}`] };
+    }
+  });
+}
+
+function sameRun(a, b) {
+  return a.number === b.number && a.day === b.day && a.dayTag === b.dayTag;
+}
+
+function isDuplicatePage(previous, run, source) {
+  if (!previous || previous.source !== source || !sameRun(previous, run)) return false;
+
+  const { page: _previousPage, source: _source, ...previousBody } = previous;
+  const { page: _currentPage, ...currentBody } = run;
+  return JSON.stringify(previousBody) === JSON.stringify(currentBody);
+}
+
+function keepParsedRuns(parsedPages, source, output) {
   let count = 0;
+
   for (const { page, run, problems, unnamedRelief } of parsedPages) {
-    // A relief with no run number is likely a printing error: if the same run is printed on
-    // another page too, leave this version out; otherwise keep it (it is flagged under problems).
+    // If a better copy of a run with an unnamed relief exists, leave this page out.
     if (run && unnamedRelief) {
-      const other = parsedPages.find((o) => o.page !== page && o.run && sameRun(o.run, run));
-      if (other) {
-        all.discardedPages.push({ source: name, page, run: run.number, keptPage: other.page,
-          reason: "Relief with no run number; the same run is on another page" });
+      const betterCopy = parsedPages.find((candidate) =>
+        candidate.page !== page && candidate.run && sameRun(candidate.run, run));
+
+      if (betterCopy) {
+        output.discardedPages.push({
+          source,
+          page,
+          run: run.number,
+          keptPage: betterCopy.page,
+          reason: "Relief with no run number; the same run is on another page",
+        });
         continue;
       }
     }
-    for (const message of problems) all.problems.push({ source: name, page, run: run?.number ?? null, message });
+
+    for (const message of problems) {
+      output.problems.push({ source, page, run: run?.number ?? null, message });
+    }
     if (!run) continue;
-    // Same run printed again on the next page: skip exact duplicates, flag anything else.
-    const prev = all.runs.at(-1);
-    if (prev && prev.source === name && sameRun(prev, run)) {
-      const { page: _a, source: _b, ...prevBody } = prev;
-      const { page: _c, ...thisBody } = run;
-      if (JSON.stringify(prevBody) === JSON.stringify(thisBody)) {
-        all.duplicatePages.push({ source: name, page, sameAsPage: prev.page, run: run.number });
-        continue;
-      }
-      all.problems.push({ source: name, page, run: run.number,
-        message: `Same run number as page ${prev.page} but different contents — kept both` });
+
+    const previous = output.runs.at(-1);
+    if (isDuplicatePage(previous, run, source)) {
+      output.duplicatePages.push({
+        source,
+        page,
+        sameAsPage: previous.page,
+        run: run.number,
+      });
+      continue;
     }
-    all.runs.push({ ...run, source: name });
+    if (previous?.source === source && sameRun(previous, run)) {
+      output.problems.push({
+        source,
+        page,
+        run: run.number,
+        message: `Same run number as page ${previous.page} but different contents — kept both`,
+      });
+    }
+
+    output.runs.push({ ...run, source });
     count++;
   }
-  all.sources.push({ file: name, pages: pages.length, runs: count });
-  console.log(`\rRead ${name}: ${pages.length} pages, ${count} runs.          `);
+
+  return count;
 }
 
-all.runCount = all.runs.length;
+async function readSource(input, output) {
+  const name = path.basename(input);
+  process.stdout.write(`Reading ${name} ...`);
 
-// Where each time-point name is (see locations.js), for every name used in these runs.
-const used = new Set(all.runs.flatMap((r) => r.halves.flatMap((h) => h.trips.flatMap((t) =>
-  [t.begin, ...t.stops, t.end].map((p) => p.location)))));
-// Leaders/followers marked "*": look up who takes over that run.
-all.problems.push(...resolveMidRunChanges(all.runs));
-// Then swap the paddle names in each run for readable names and coordinates.
-for (const r of all.runs) placeLocations(r);
-// Write every duration (pay, working, travel, recovery, thru work) as "H:MM:SS" text.
-for (const r of all.runs) durationsAsText(r);
-all.locations = {};
-for (const name of [...used].sort()) {
-  all.locations[name] = LOCATIONS[name] ?? null;
-  if (!LOCATIONS[name]) all.problems.push({ source: null, page: null, run: null, message: `Location "${name}" is not in locations.js` });
+  const parsedPages = await readSourcePages(input, name);
+  const count = keepParsedRuns(parsedPages, name, output);
+
+  output.sources.push({ file: name, pages: parsedPages.length, runs: count });
+  console.log(`\rRead ${name}: ${parsedPages.length} pages, ${count} runs.          `);
 }
-// One day type and one garage per file.
-const days = [...new Set(all.runs.map((r) => r.day))];
-const garages = [...new Set(all.runs.map((r) => r.garage || "Unknown garage"))];
-if (days.length !== 1 || garages.length !== 1) {
-  console.log(`Not saved: these paddles mix ${days.length > 1 ? "days (" + days.join(", ") + ")" : ""}`
-    + `${days.length > 1 && garages.length > 1 ? " and " : ""}${garages.length > 1 ? "garages (" + garages.join(", ") + ")" : ""}.`
+
+function addLocationsAndResolveRuns(output) {
+  const usedLocations = new Set(
+    output.runs.flatMap((run) => run.halves.flatMap((half) =>
+      half.trips.flatMap((trip) =>
+        [trip.begin, ...trip.stops, trip.end].map((point) => point.location)))),
+  );
+
+  output.problems.push(...resolveMidRunChanges(output.runs));
+
+  for (const run of output.runs) {
+    placeLocations(run);
+    durationsAsText(run);
+  }
+
+  output.locations = {};
+  for (const name of [...usedLocations].sort()) {
+    output.locations[name] = LOCATIONS[name] ?? null;
+    if (!LOCATIONS[name]) {
+      output.problems.push({
+        source: null,
+        page: null,
+        run: null,
+        message: `Location "${name}" is not in locations.js`,
+      });
+    }
+  }
+}
+
+function serviceTypes(runs) {
+  return {
+    days: [...new Set(runs.map((run) => run.day))],
+    garages: [...new Set(runs.map((run) => run.garage || "Unknown garage"))],
+  };
+}
+
+function reportMixedService({ days, garages }) {
+  if (days.length === 1 && garages.length === 1) return false;
+
+  const mixedDays = days.length > 1 ? `days (${days.join(", ")})` : "";
+  const mixedGarages = garages.length > 1 ? `garages (${garages.join(", ")})` : "";
+  const separator = mixedDays && mixedGarages ? " and " : "";
+  console.log(`Not saved: these paddles mix ${mixedDays}${separator}${mixedGarages}.`
     + " Run Weekday, Saturday and Sunday paddles separately.");
-  process.exit(1);
+  return true;
 }
-all.statistics = runStatistics(all.runs);
-all.garage = garages[0];
-all.day = days[0];
-outFile ??= `${all.garage} ${all.day} Runs Parsed.json`;
-await fs.writeFile(outFile, JSON.stringify(all, null, 2));
-console.log(`Saved ${all.runCount} runs to ${outFile}`);
-const st = all.statistics;
-console.log(`  ${st.inServiceTrips} in-service trips, ${st.pullouts} pullouts, ${st.swings} swings, ${st.blocks} Block, ${st.pto} PTO`);
-if (all.duplicatePages.length) console.log(`Skipped ${all.duplicatePages.length} duplicate page(s) — see "duplicatePages".`);
-if (all.discardedPages.length) console.log(`Left out ${all.discardedPages.length} page(s) with a printing error that had a good copy elsewhere — see "discardedPages".`);
-if (all.problems.length) {
-  console.log(`${all.problems.length} problem(s) found — see "problems" in ${outFile}. First few:`);
-  for (const p of all.problems.slice(0, 10)) console.log(`  page ${p.page} (${p.run ?? "?"}): ${p.message}`);
+
+function reportResults(output, outFile) {
+  const stats = output.statistics;
+  console.log(`Saved ${output.runCount} runs to ${outFile}`);
+  console.log(`  ${stats.inServiceTrips} in-service trips, ${stats.pullouts} pullouts, ${stats.swings} swings, ${stats.blocks} Block, ${stats.pto} PTO`);
+  if (output.duplicatePages.length) {
+    console.log(`Skipped ${output.duplicatePages.length} duplicate page(s) — see "duplicatePages".`);
+  }
+  if (output.discardedPages.length) {
+    console.log(`Left out ${output.discardedPages.length} page(s) with a printing error that had a good copy elsewhere — see "discardedPages".`);
+  }
+  if (output.problems.length) {
+    console.log(`${output.problems.length} problem(s) found — see "problems" in ${outFile}. First few:`);
+    for (const problem of output.problems.slice(0, 10)) {
+      console.log(`  page ${problem.page} (${problem.run ?? "?"}): ${problem.message}`);
+    }
+  }
+}
+
+async function main(args = process.argv.slice(2)) {
+  const { inputs, outFile: requestedOutFile } = parseArguments(args);
+  if (inputs.length === 0) {
+    console.log("Usage: node read-paddles.js <paddles.pdf> [more.pdf ...] [-o other-name.json]");
+    console.log("All the PDFs must be for one day type (Weekday, Saturday or Sunday) and one garage.");
+    process.exitCode = 1;
+    return;
+  }
+
+  const output = createOutput();
+  for (const input of inputs) await readSource(input, output);
+
+  output.runCount = output.runs.length;
+  addLocationsAndResolveRuns(output);
+
+  const types = serviceTypes(output.runs);
+  if (reportMixedService(types)) {
+    process.exitCode = 1;
+    return;
+  }
+
+  output.statistics = runStatistics(output.runs);
+  output.garage = types.garages[0];
+  output.day = types.days[0];
+
+  const outFile = requestedOutFile ?? `${output.garage} ${output.day} Runs Parsed.json`;
+  await fs.writeFile(outFile, JSON.stringify(output, null, 2));
+  reportResults(output, outFile);
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  main().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
 }
