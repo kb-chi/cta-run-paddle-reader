@@ -134,7 +134,7 @@ function timeUseFor(runs, win) {
 // The same split per route (interesting facts: most / least efficient routes). In-service time goes to the
 // trip's route; time between trips (layovers, deadheads, pullouts) goes to the route of the next in-service
 // trip, since it's spent getting ready for it; time after the half's last trip (the pull-in) to that last
-// trip's route. Also which routes are "rush hour only": no in-service trip running at any time 12–1 PM.
+// trip's route. Also which routes are "rush hour only": no in-service trip running at any time 12–1 PM, and none at 2–3 AM (so night owl routes aren't counted).
 function routeTimeUseFor(runs, win) {
   const segs = !win ? [[-Infinity, Infinity]] : [[win[0] * 3600, win[1] * 3600], ...(win[1] > 24 ? [[0, (win[1] - 24) * 3600]] : [])];
   const inWin = (s, e) => segs.reduce((n, [a, b]) => n + Math.max(0, Math.min(e, b) - Math.max(s, a)), 0);
@@ -143,7 +143,12 @@ function routeTimeUseFor(runs, win) {
     const trips = h.trips.filter((t) => t.begin?.time && t.end?.time);
     const service = trips.filter((t) => t.inService && t.route);
     if (!service.length) continue;
-    for (const t of service) if (clock(t.begin.time) < 13 * 3600 && clock(t.end.time) > 12 * 3600) midday.add(t.route);
+    for (const t of service) {
+      const b = clock(t.begin.time), e = clock(t.end.time);
+      const runsDuring = (a, z) => b < z * 3600 && e > a * 3600;
+      // midday 12–1 PM, or the middle of the night 2–3 AM (either side of the schedule day), so owl routes don't count
+      if (runsDuring(12, 13) || runsDuring(2, 3) || runsDuring(26, 27)) midday.add(t.route);
+    }
     // the route each moment belongs to: the next in-service trip's, else the last one's
     const owner = (i) => (trips.slice(i).find((t) => t.inService && t.route) ?? service.at(-1)).route;
     const add = (route, k, n) => { if (n > 0) { const o = (routes[route] ??= { service: 0, deadhead: 0, garage: 0, recovery: 0 }); o[k] += n; } };

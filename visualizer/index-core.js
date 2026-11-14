@@ -295,7 +295,7 @@ const hrs = (s) => `${Math.round(s / 3600).toLocaleString()} h`;
 const pctOf = (n, of) => (of ? Math.round((1000 * n) / of) / 10 : 0);
 const legendOf = (items) => items.map(([name, bg]) => `<span><span class="swatch" style="background:${bg}"></span>${esc(name)}</span>`).join("");
 
-const facts = { origin: "pullout", rank: "count", eff: "most", noRush: false, all: { origin: false, short: false, hour: false, eff: false },
+const facts = { origin: "pullout", rank: "count", eff: "most", noRush: { origin: false, short: false, hour: false, eff: false }, all: { origin: false, short: false, hour: false, eff: false },
   rt: null, rtKey: null }; // rt = api/routetime result for rtKey (day|garage|period)
 async function loadRouteTime() {
   const key = `${state.day}|${state.garage}|${state.period}`;

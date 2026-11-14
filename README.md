@@ -26,7 +26,7 @@ The **Summer 2026** paddles (via FOIA) for all seven garages, Weekday, Saturday 
   - run types and swing share;
   - how trips start;
   - service efficiency, and how platform time splits between service, layover, deadhead and garage trips.
-- **Interesting facts:** top 10 routes by how trips start (pullout, deadhead, from another route, turnaround), by short trips, by busiest hour, and by most or least efficient (share of platform time in service, optionally leaving out rush-hour-only routes: those with no trips running between noon and 1 PM), for the selected day, garage and period. Each list shows its top 10, with a button to show all.
+- **Interesting facts:** top 10 routes by how trips start (pullout, deadhead, from another route, turnaround), by short trips, by busiest hour, and by most or least efficient (share of platform time in service), for the selected day, garage and period. Each list shows its top 10, with a button to show all. Each list has its own Include / Exclude switch for rush-hour-only routes (those with no trips running 12–1 PM and none 2–3 AM, so night owl routes don't count); when included, they're tagged "rush only".
 - **Animations** of scheduled service for a route or a whole garage, including deadheads and route changes. The map can be turned 90° (north left or right) to fit a wide screen, with a compass showing north. They export as GIFs.
 - **JSON data** for every run, its trips, reliefs and statistics.
 

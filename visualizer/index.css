@@ -128,9 +128,16 @@
 
   .fact-more:not(:empty) { margin-top: 10px; }
 
-  .fact-check { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); cursor: pointer; }
+  /* per-module rush hour only switch: a tinted strip under the heading so it can't be missed */
+  .rush-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 10px 0 14px; padding: 8px 12px;
+    background: var(--wash); border-left: 3px solid var(--g1); border-radius: 6px; }
+  .rush-bar strong { font-size: 14px; }
+  .rush-bar .seg { background: var(--surface); }
+  .rush-bar .seg button[aria-pressed="true"] { background: var(--g1); color: #fff; }
+  .rush-bar .sub { flex: 1 1 220px; margin: 0; }
+  .rush-tag { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 9px; font-size: 11px; font-weight: 600;
+    border: 1px solid var(--border); color: var(--ink-2); white-space: nowrap; }
 
-  #fEffNote:not(:empty) { margin-top: 8px; }
 
   .gc-row.rank { cursor: pointer; border-radius: 6px; }
 

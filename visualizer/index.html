@@ -181,18 +181,21 @@
           </div>
         </div>
       </div>
+      <div class="rush-bar" data-frush="origin"></div>
       <div id="fOriginList"></div>
       <div class="fact-more" data-fmore="origin"></div>
     </section>
     <section class="card chart-card">
       <h2 data-ctx id="fShortTitle">Top 10 Routes With The Most Short Trips</h2>
       <div class="sub">Trips that start or end short of a terminal (short lines and short turns), both directions together. A trip handed to another run mid-route is judged by where the bus finally ends up.</div>
+      <div class="rush-bar" data-frush="short"></div>
       <div id="fShortList"></div>
       <div class="fact-more" data-fmore="short"></div>
     </section>
     <section class="card chart-card">
       <h2 data-ctx id="fHourTitle">Top 10 Routes By Busiest Hour</h2>
       <div class="sub">The most departures a route has in one direction within a single clock hour, and the frequency that works out to.</div>
+      <div class="rush-bar" data-frush="hour"></div>
       <div id="fHourList"></div>
       <div class="fact-more" data-fmore="hour"></div>
     </section>
@@ -207,12 +210,11 @@
             <button type="button" data-feff="most" aria-pressed="true">Most efficient</button>
             <button type="button" data-feff="least" aria-pressed="false">Least efficient</button>
           </div>
-          <label class="fact-check"><input type="checkbox" id="fNoRush"> Exclude rush hour only routes</label>
         </div>
       </div>
+      <div class="rush-bar" data-frush="eff"></div>
       <div id="fEffList"></div>
       <div class="fact-more" data-fmore="eff"></div>
-      <div class="sub" id="fEffNote"></div>
     </section>
   </div>
 </div>

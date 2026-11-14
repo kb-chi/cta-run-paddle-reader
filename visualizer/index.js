@@ -163,7 +163,7 @@ async function applyState() {
         // each route's platform time in the period, for the Service Efficiency card (shows its own error)
         loadRouteTime().catch(() => null),
       ]);
-      if (ticket !== applying) return;
+      if (ticket !== applyTicket) return;
       state.allSummary = allSummary;
       sides.forEach((r, i) => {
         const p = routeView.paneFor(i), key = `${state.day}|${state.garage}|${r}`;
